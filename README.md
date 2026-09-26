@@ -9,11 +9,13 @@ platform.
 
 ## Design principle: match the Android app exactly
 
-Asked for explicitly: same icons, same logic, same everything as the Android app, wherever iOS
-lets it be the same. The Android app's own README (its "Design choices worth knowing before
-changing this code" section) and its UI/settings/boat-mode behavior are the reference to build
-from -- not a fresh design. Only diverge from it where the platform genuinely forces a
-difference (e.g. no Chaquopy equivalent, different notification/background-execution rules, a
+Asked for explicitly: same icons (toolbar icons *and* the app/launcher icon itself, e.g. the
+book-with-course-line design already used for `ic_launcher_foreground.xml` on Android), same
+logic, same everything as the Android app, wherever iOS lets it be the same. The Android app's
+own README (its "Design choices worth knowing before changing this code" section) and its
+UI/settings/boat-mode behavior are the reference to build from -- not a fresh design. Only
+diverge from it where the platform genuinely forces a difference (e.g. no Chaquopy equivalent,
+different notification/background-execution rules, a
 UI toolkit that can't reproduce something pixel-for-pixel); anything that *can* match, should.
 
 ## Status
