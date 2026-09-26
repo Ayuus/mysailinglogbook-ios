@@ -1,6 +1,6 @@
 # My Sailing Logbook (iOS)
 
-iOS counterpart to [androidsailinglogbook](https://github.com/Ayuus/androidsailinglogbook): syncs
+iOS counterpart to [mysailinglogbook-android](https://github.com/Ayuus/mysailinglogbook-android): syncs
 voyage data from a boat's [Actisense W2K-2](https://actisense.com) NMEA 2000-to-WiFi gateway,
 builds the same HTML sailing logbook the desktop [nmea2log](https://github.com/Ayuus/nmea2log)
 CLI produces, shows it in-app, and (optionally) publishes it to a WordPress site or over SFTP --
@@ -37,6 +37,6 @@ reimplements from scratch if it can be avoided.
 
 - [nmea2log](https://github.com/Ayuus/nmea2log) -- the shared Python core (decoding, trip
   building, HTML generation, desktop CLI).
-- [androidsailinglogbook](https://github.com/Ayuus/androidsailinglogbook) -- the Android app this
+- [mysailinglogbook-android](https://github.com/Ayuus/mysailinglogbook-android) -- the Android app this
   one mirrors; a useful reference for the overall app design (UI flow, settings, boat mode,
   publishing) even where the platform-specific implementation has to differ.
