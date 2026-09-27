@@ -91,8 +91,16 @@ class SettingsScreen:
         form.add(self.publish_method_selection)
 
         self.wordpress_box = toga.Box(style=Pack(direction=COLUMN))
+        # Placeholder, not a default value (never saved unless typed) -- same reasoning as
+        # SettingsStore.kt's own restUploadUrl doc comment: a brand new install shouldn't show a
+        # real server hostname/path. The exact format (not just the site's own homepage or the
+        # logbook page -- that redirects to a login page instead of uploading, see this repo's
+        # README) matches the Android app's own README wording verbatim.
         self.rest_url_field = self._field(
-            self.wordpress_box, "WordPress REST URL", self.store.rest_upload_url
+            self.wordpress_box,
+            "WordPress REST URL",
+            self.store.rest_upload_url,
+            placeholder="https://your-site.example/wp-json/nmea2log/v1/logbook",
         )
         self.rest_user_field = self._field(
             self.wordpress_box, "WordPress username", self.store.rest_upload_user
@@ -183,10 +191,10 @@ class SettingsScreen:
     # -- small widget-building helpers, same role as SettingsActivity.kt's own field()/
     # sectionHeader()/checkbox() local functions --
 
-    def _field(self, container, label, initial_value, is_password=False):
+    def _field(self, container, label, initial_value, is_password=False, placeholder=None):
         container.add(toga.Label(label, style=Pack(margin_top=8)))
         widget_cls = toga.PasswordInput if is_password else toga.TextInput
-        field = widget_cls(value=initial_value)
+        field = widget_cls(value=initial_value, placeholder=placeholder)
         container.add(field)
         return field
 
