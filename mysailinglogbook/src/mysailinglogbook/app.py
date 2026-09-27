@@ -15,6 +15,9 @@ from toga.style.pack import COLUMN, ROW, Pack
 
 from nmea2log import android_entry
 
+from .settings_screen import SettingsScreen
+from .settings_store import SettingsStore
+
 
 def detect_subnet_prefix():
     """Best-effort port of Android's HotspotDetector.detectSubnetPrefix() (see that file's own
@@ -97,31 +100,27 @@ class ProgressCallback:
 class MySailingLogbook(toga.App):
     def startup(self):
         # Same order as Android's own toolbar (MainActivity.kt): download, rebuild, publish,
-        # view logbook, boat mode, settings. Android's own toolbar buttons are icon-only, no
-        # visible text label (see MainActivity.kt's iconButton() helper -- tooltip text only,
-        # shown on long-press/hover) -- matched here the same way. Icons are the same shapes as
-        # Android's own vector drawables (ic_download_24, ic_refresh_24, ic_upload_24,
-        # ic_article_24, ic_sailboat_24, ic_settings_24), rasterized from matching SVGs -- see
-        # resources/icons-svg/.
-        self.download_button = toga.Button(
-            icon=toga.Icon("resources/download"), on_press=self.on_download, style=Pack(flex=1)
-        )
-        self.rebuild_button = toga.Button(
-            icon=toga.Icon("resources/refresh"), on_press=self.on_rebuild, style=Pack(flex=1)
-        )
-        self.publish_button = toga.Button(
-            icon=toga.Icon("resources/upload"), on_press=self.on_publish, style=Pack(flex=1)
-        )
-        self.view_button = toga.Button(
-            icon=toga.Icon("resources/article"), on_press=self.on_view, style=Pack(flex=1)
-        )
-        self.boat_mode_button = toga.Button(
-            icon=toga.Icon("resources/sailboat"), on_press=self.on_boat_mode, style=Pack(flex=1)
-        )
-        self.settings_button = toga.Button(
-            icon=toga.Icon("resources/settings"), on_press=self.on_settings, style=Pack(flex=1)
-        )
+        # view logbook, boat mode, [flexible spacer], settings. Android's own toolbar buttons
+        # are icon-only, no visible text label (see MainActivity.kt's iconButton() helper --
+        # tooltip text only, shown on long-press/hover) -- matched here the same way. Icons are
+        # the same shapes as Android's own vector drawables (ic_download_24, ic_refresh_24,
+        # ic_upload_24, ic_article_24, ic_sailboat_24, ic_settings_24), rasterized from matching
+        # SVGs -- see resources/icons-svg/.
+        #
+        # No flex on the buttons themselves (asked for explicitly, matching Android's own
+        # buttonRow: the first 5 icons sit at their natural size, tightly packed, with no gap
+        # LayoutParams between them at all) -- a single flexible spacer between boat_mode_button
+        # and settings_button does the same job as Android's own zero-size weight=1 spacer View,
+        # pushing only Settings to the far right instead of stretching every icon's own slot to
+        # fill the toolbar width.
+        self.download_button = toga.Button(icon=toga.Icon("resources/download"), on_press=self.on_download)
+        self.rebuild_button = toga.Button(icon=toga.Icon("resources/refresh"), on_press=self.on_rebuild)
+        self.publish_button = toga.Button(icon=toga.Icon("resources/upload"), on_press=self.on_publish)
+        self.view_button = toga.Button(icon=toga.Icon("resources/article"), on_press=self.on_view)
+        self.boat_mode_button = toga.Button(icon=toga.Icon("resources/sailboat"), on_press=self.on_boat_mode)
+        self.settings_button = toga.Button(icon=toga.Icon("resources/settings"), on_press=self.on_settings)
 
+        toolbar_spacer = toga.Box(style=Pack(flex=1))
         toolbar = toga.Box(
             children=[
                 self.download_button,
@@ -129,6 +128,7 @@ class MySailingLogbook(toga.App):
                 self.publish_button,
                 self.view_button,
                 self.boat_mode_button,
+                toolbar_spacer,
                 self.settings_button,
             ],
             style=Pack(direction=ROW),
@@ -139,10 +139,13 @@ class MySailingLogbook(toga.App):
         # replaces it once there is one" idea as MainActivity's own setLogExpanded().
         self.log_view = toga.MultilineTextInput(readonly=True, style=Pack(flex=1))
 
-        main_box = toga.Box(children=[toolbar, self.log_view], style=Pack(direction=COLUMN))
+        # The toolbar + log view -- the "main" screen this swaps back to from Settings (there's
+        # no second toga.Window to switch to on iOS, see settings_screen.py's own doc comment on
+        # why this swaps the single MainWindow's content in place instead).
+        self.main_content = toga.Box(children=[toolbar, self.log_view], style=Pack(direction=COLUMN))
 
         self.main_window = toga.MainWindow(title=self.formal_name)
-        self.main_window.content = main_box
+        self.main_window.content = self.main_content
         self.main_window.show()
 
         # Mirrors SyncState.inProgress/cancelled on Android (MainActivity.runSync()'s own
@@ -153,18 +156,8 @@ class MySailingLogbook(toga.App):
         self.sync_in_progress = False
         self.cancel_event = threading.Event()
 
-        # Same shape as Android's own SettingsStore, just not editable from the UI yet (see
-        # on_settings -- the Settings screen itself isn't ported yet). Download stays a no-op
-        # until w2k2_user/w2k2_password are filled in here, same as Android's own
-        # isW2k2ConfigComplete guard in runSync().
-        self.settings = {
-            "w2k2_user": "",
-            "w2k2_password": "",
-            "boat_name": "",
-            "mmsi": "",
-            "call_sign": "",
-            "min_stop_minutes": None,
-        }
+        # Same fields/defaults as Android's own SettingsStore, see settings_store.py.
+        self.settings_store = SettingsStore(self.paths.data)
 
     def log(self, line: str) -> None:
         self.log_view.value += line + "\n"
@@ -189,8 +182,8 @@ class MySailingLogbook(toga.App):
         if self.sync_in_progress:
             self.log("[info] A sync is already running.")
             return
-        if not (self.settings["w2k2_user"] and self.settings["w2k2_password"]):
-            self.log("[info] Fill in the W2K-2 credentials first (Settings isn't built yet -- coming next).")
+        if not self.settings_store.is_w2k2_config_complete:
+            self.log("[info] Fill in the W2K-2 username and password in Settings first.")
             return
         subnet_prefix = detect_subnet_prefix()
         if subnet_prefix is None:
@@ -219,7 +212,16 @@ class MySailingLogbook(toga.App):
         self.log("[info] Boat mode tapped (not implemented yet)")
 
     def on_settings(self, widget):
-        self.log("[info] Settings tapped (not implemented yet)")
+        self.show_settings_screen()
+
+    def show_settings_screen(self) -> None:
+        # Rebuilt fresh every time Settings is opened -- always reflects whatever was last
+        # saved, and avoids keeping a second, potentially-stale set of field widgets around
+        # between visits (see settings_screen.py).
+        self.main_window.content = SettingsScreen(self).content
+
+    def show_main_screen(self) -> None:
+        self.main_window.content = self.main_content
 
     def _start_background(self, target, *args) -> None:
         self.sync_in_progress = True
@@ -258,11 +260,11 @@ class MySailingLogbook(toga.App):
             ebl_paths,
             str(self.output_html_path()),
             str(self.sample_cache_path()),
-            self.settings["boat_name"],
-            self.settings["mmsi"],
-            self.settings["call_sign"],
+            self.settings_store.boat_name,
+            self.settings_store.mmsi,
+            self.settings_store.call_sign,
             progress_callback=callback,
-            min_stop_minutes=self.settings["min_stop_minutes"],
+            min_stop_minutes=self.settings_store.min_stop_minutes,
         )
         self._log_result(result)
 
@@ -271,17 +273,17 @@ class MySailingLogbook(toga.App):
     def _run_sync(self, subnet_prefix: str) -> None:
         callback = ProgressCallback(self, self.cancel_event)
         result = android_entry.sync_from_w2k2(
-            self.settings["w2k2_user"],
-            self.settings["w2k2_password"],
+            self.settings_store.w2k2_user,
+            self.settings_store.w2k2_password,
             subnet_prefix,
             str(self.ebl_dir()),
             str(self.output_html_path()),
             str(self.sample_cache_path()),
-            self.settings["boat_name"],
-            self.settings["mmsi"],
-            self.settings["call_sign"],
+            self.settings_store.boat_name,
+            self.settings_store.mmsi,
+            self.settings_store.call_sign,
             progress_callback=callback,
-            min_stop_minutes=self.settings["min_stop_minutes"],
+            min_stop_minutes=self.settings_store.min_stop_minutes,
         )
         self._log_result(result)
 
