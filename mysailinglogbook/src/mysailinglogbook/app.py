@@ -134,15 +134,23 @@ class MySailingLogbook(toga.App):
             style=Pack(direction=ROW),
         )
 
-        # Stands in for Android's own log view (a plain scrolling text area) until there's
-        # something real to show there -- same "log is the default content, the built logbook
-        # replaces it once there is one" idea as MainActivity's own setLogExpanded().
+        # The log view (a plain scrolling text area) and the WebView that shows the built
+        # logbook -- MainActivity.kt's own log/webView pair, toggled by the View button
+        # (viewLocalLogbook()) while the toolbar itself stays visible and usable the whole time
+        # (asked for explicitly there: "works even while a sync is running", since it only reads
+        # a file already on disk -- doesn't touch SyncState at all). content_area holds whichever
+        # one is currently showing; see _show_log_content()/_show_logbook_content().
         self.log_view = toga.MultilineTextInput(readonly=True, style=Pack(flex=1))
+        self.web_view = toga.WebView(style=Pack(flex=1))
+        self.showing_local_logbook = False
+        self.content_area = toga.Box(children=[self.log_view], style=Pack(flex=1, direction=COLUMN))
 
-        # The toolbar + log view -- the "main" screen this swaps back to from Settings (there's
+        # toolbar + content_area -- the "main" screen this swaps back to from Settings (there's
         # no second toga.Window to switch to on iOS, see settings_screen.py's own doc comment on
-        # why this swaps the single MainWindow's content in place instead).
-        self.main_content = toga.Box(children=[toolbar, self.log_view], style=Pack(direction=COLUMN))
+        # why Settings swaps the single MainWindow's content in place instead; unlike Settings,
+        # the View toggle only swaps content_area's own child, leaving the toolbar in place, to
+        # match Android's own layout -- see the comment above).
+        self.main_content = toga.Box(children=[toolbar, self.content_area], style=Pack(direction=COLUMN))
 
         self.main_window = toga.MainWindow(title=self.formal_name)
         self.main_window.content = self.main_content
@@ -206,7 +214,37 @@ class MySailingLogbook(toga.App):
         self.log("[info] Publish tapped (not implemented yet)")
 
     def on_view(self, widget):
-        self.log("[info] View tapped (not implemented yet)")
+        # Toggles back to the log -- the logbook itself is already loaded in the WebView from
+        # the tap that showed it, nothing to reload. Same behavior as MainActivity's own
+        # viewLocalLogbook() early-return.
+        if self.showing_local_logbook:
+            self.showing_local_logbook = False
+            self._show_log_content()
+            return
+
+        html_path = self.output_html_path()
+        if not html_path.exists():
+            self.log("[info] No logbook to show yet.")
+            return
+        try:
+            html = html_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            self.log(f"[error] Could not read the logbook: {exc}")
+            return
+        # Same technique as MainActivity's own loadLogbookIntoWebView(): pass the HTML in as a
+        # string with the file's own parent directory as the root/base URL (for any relative
+        # resource references), rather than pointing the WebView straight at a file:// URL.
+        self.web_view.set_content(f"file://{html_path.parent}/", html)
+        self.showing_local_logbook = True
+        self._show_logbook_content()
+
+    def _show_log_content(self) -> None:
+        self.content_area.clear()
+        self.content_area.add(self.log_view)
+
+    def _show_logbook_content(self) -> None:
+        self.content_area.clear()
+        self.content_area.add(self.web_view)
 
     def on_boat_mode(self, widget):
         self.log("[info] Boat mode tapped (not implemented yet)")
@@ -240,13 +278,16 @@ class MySailingLogbook(toga.App):
         self._set_toolbar_enabled(True)
 
     def _set_toolbar_enabled(self, enabled: bool) -> None:
-        # settings_button is left out deliberately -- Settings is its own screen, unaffected by
-        # a sync/build in progress, same as Android leaves its settings button reachable.
+        # settings_button and view_button are left out deliberately, matching MainActivity.kt:
+        # Settings is its own screen, unaffected by a sync/build in progress; viewLocalLogbook()
+        # "works even while a sync is running" (its own doc comment) since it only reads a file
+        # already on disk, never touches SyncState. download_button also stays enabled on
+        # Android (tapping it again cancels instead) -- not ported yet, so it's still disabled
+        # here like the rest.
         for button in (
             self.download_button,
             self.rebuild_button,
             self.publish_button,
-            self.view_button,
             self.boat_mode_button,
         ):
             button.enabled = enabled
