@@ -201,7 +201,24 @@ class MySailingLogbook(toga.App):
         self.settings_store = SettingsStore(self.paths.data)
 
     def log(self, line: str) -> None:
+        # Same "only follow along if already at the bottom" behavior as MainActivity's own
+        # refreshLogView()/isLogScrolledToBottom(): checked *before* appending, so a user who
+        # scrolled up to read an earlier line doesn't get yanked back down to the bottom the
+        # moment the next line arrives. Toga's own MultilineTextInput has no cross-platform way
+        # to query scroll position, so this reads the native UITextView directly (it's a
+        # UIScrollView subclass) -- same contentOffset/contentSize/bounds properties toga_iOS's
+        # own ScrollContainer backend already reads the same way.
+        was_at_bottom = self._log_is_scrolled_to_bottom()
         self.log_view.value += line + "\n"
+        if was_at_bottom:
+            self.log_view.scroll_to_bottom()
+
+    def _log_is_scrolled_to_bottom(self) -> bool:
+        native = self.log_view._impl.native
+        # A few points of slack, same reasoning as Android's own 4dp: scroll position/content
+        # height can be off by a rounding point or two even while visually "at the bottom".
+        slack = 4
+        return native.contentOffset.y + native.bounds.size.height >= native.contentSize.height - slack
 
     def ebl_dir(self) -> Path:
         """Where downloaded/local .ebl files live -- same folder name as Android's own
