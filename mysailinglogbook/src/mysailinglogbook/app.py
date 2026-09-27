@@ -6,7 +6,6 @@ status area, logbook view) are the same; see the Android app's MainActivity.kt f
 reference behavior each of these will eventually need to match.
 """
 
-import socket
 import threading
 from pathlib import Path
 
@@ -16,6 +15,7 @@ from toga.style.pack import COLUMN, ROW, Pack
 
 from nmea2log import android_entry
 
+from .network import detect_subnet_prefix
 from .settings_screen import SettingsScreen
 from .settings_store import SettingsStore
 from .translations import t
@@ -50,42 +50,6 @@ def _set_busy_pulse(button, busy: bool) -> None:
     else:
         native.layer.removeAllAnimations()
         native.alpha = 1.0
-
-
-def detect_subnet_prefix():
-    """Best-effort port of Android's HotspotDetector.detectSubnetPrefix() (see that file's own
-    doc comment): the phone's own IPv4 address on whichever private network the W2K-2 is also
-    joined to (typically this phone's own Personal Hotspot, turned on by the user beforehand --
-    same assumption Android makes).
-
-    Diverges from Android here only because the platform forces it (see this repo's own README,
-    "Design principle: match the Android app exactly"): Android enumerates NetworkInterface
-    objects by name to specifically find the hotspot's own bridge interface, ruling out the
-    cellular one even though both are up at once. Plain Python on iOS has no equivalent
-    interface-by-name enumeration available without extra native bindings, so this instead asks
-    the OS which local address it would route outbound traffic from (a UDP "connect" sends no
-    actual packets, it only makes the kernel pick a route) -- correct whenever the OS prefers
-    WiFi over cellular for routing, which is the normal case. Returns None (same as Android) if
-    nothing suitable is found.
-    """
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.connect(("8.8.8.8", 80))
-            local_ip = sock.getsockname()[0]
-    except OSError:
-        return None
-
-    parts = local_ip.split(".")
-    if len(parts) != 4:
-        return None
-    try:
-        first, second = int(parts[0]), int(parts[1])
-    except ValueError:
-        return None
-    is_private = first == 10 or (first == 172 and 16 <= second <= 31) or (first == 192 and second == 168)
-    if not is_private:
-        return None
-    return ".".join(parts[:3]) + "."
 
 
 class ProgressCallback:

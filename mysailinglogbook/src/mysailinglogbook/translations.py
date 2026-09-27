@@ -416,6 +416,19 @@ _STRINGS = {
 }
 
 
+def pick_language(preferred_codes) -> str:
+    """The first of preferred_codes (e.g. ["nl-NL", "en-US"], iOS's own NSLocale.preferredLanguages
+    format -- a language tag, region optional) that's one of this app's 4 supported languages;
+    English otherwise. Pure and side-effect-free (plain strings in, no NSLocale/rubicon-objc
+    involved) specifically so it can be unit-tested directly -- see detect_system_language(),
+    the only caller, for the actual OS integration."""
+    for code in preferred_codes:
+        short = str(code)[:2].lower()
+        if short in _SUPPORTED:
+            return short
+    return "en"
+
+
 def detect_system_language() -> str:
     """The device's own current language, mapped to one of this app's 4 supported ones (falls
     back to English for anything else) -- Toga/Python has no built-in way to read iOS's own
@@ -423,14 +436,9 @@ def detect_system_language() -> str:
     the device's), so this reads it directly via NSLocale, same source iOS's own Settings app
     uses."""
     try:
-        languages = _NSLocale.preferredLanguages
-        if languages and len(languages) > 0:
-            code = str(languages[0])[:2].lower()
-            if code in _SUPPORTED:
-                return code
-    except (AttributeError, IndexError, ValueError):
-        pass
-    return "en"
+        return pick_language(list(_NSLocale.preferredLanguages))
+    except (AttributeError, IndexError, ValueError, TypeError):
+        return "en"
 
 
 _LANGUAGE = detect_system_language()
