@@ -12,6 +12,11 @@ Also unlike Android: no RadioGroup/Spinner widgets exist on Toga, so the publish
 picker) instead -- same three/four choices, same behavior (only the picked publish method's own
 fields are shown, and saved; the others are cleared), just a native iOS-idiomatic control instead
 of Android's radio buttons/dropdown.
+
+All labels come from translations.py (t()), same nl/en/fr/de text Android's own strings.xml
+uses -- built fresh per instance (not module-level constants) since they depend on t(), and the
+publish-method/boot-interval Selection values double as both display text and the internal
+comparison identifier (t() is deterministic per process, so this is safe).
 """
 
 from __future__ import annotations
@@ -21,14 +26,10 @@ from toga.dialogs import ConfirmDialog, ErrorDialog, InfoDialog
 from toga.style.pack import COLUMN, ROW, Pack
 
 from .settings_store import DEFAULT_MIN_STOP_MINUTES, DEFAULT_SFTP_PORT
-
-_PUBLISH_NONE = "Don't publish"
-_PUBLISH_WORDPRESS = "WordPress"
-_PUBLISH_SFTP = "SFTP"
-_PUBLISH_OPTIONS = [_PUBLISH_NONE, _PUBLISH_WORDPRESS, _PUBLISH_SFTP]
+from .translations import t
 
 _BOOT_INTERVAL_MINUTES = [30, 60, 120, 180]
-_BOOT_INTERVAL_LABELS = [f"{m} minutes" for m in _BOOT_INTERVAL_MINUTES]
+_BOOT_INTERVAL_KEYS = ["boat_interval_30", "boat_interval_60", "boat_interval_120", "boat_interval_180"]
 
 
 def _int_or(text: str, default: int) -> int:
@@ -50,22 +51,32 @@ class SettingsScreen:
         self.app = app
         self.store = app.settings_store
 
+        # Built per instance (not module-level) since they depend on t() -- see this module's
+        # own doc comment on why the display text doubles as the comparison identifier.
+        self._publish_none = t("radio_publish_none")
+        self._publish_wordpress = t("radio_publish_wordpress")
+        self._publish_sftp = t("radio_publish_sftp")
+        publish_options = [self._publish_none, self._publish_wordpress, self._publish_sftp]
+        boot_interval_labels = [t(key) for key in _BOOT_INTERVAL_KEYS]
+
         # A plain vertical Box (not yet in a ScrollContainer -- that wraps it below), same
         # top-to-bottom field order as SettingsActivity.kt's own layout.
         form = toga.Box(style=Pack(direction=COLUMN, margin=16))
 
-        self.user_field = self._field(form, "W2K-2 username", self.store.w2k2_user)
-        self.password_field = self._field(form, "W2K-2 password", self.store.w2k2_password, is_password=True)
-        self.boat_name_field = self._field(form, "Boat name", self.store.boat_name)
-        self.mmsi_field = self._field(form, "MMSI", self.store.mmsi)
-        self.call_sign_field = self._field(form, "Call sign", self.store.call_sign)
+        self.user_field = self._field(form, t("label_w2k2_user"), self.store.w2k2_user)
+        self.password_field = self._field(
+            form, t("label_w2k2_password"), self.store.w2k2_password, is_password=True
+        )
+        self.boat_name_field = self._field(form, t("label_boat_name"), self.store.boat_name)
+        self.mmsi_field = self._field(form, t("label_mmsi"), self.store.mmsi)
+        self.call_sign_field = self._field(form, t("label_call_sign"), self.store.call_sign)
         self.auto_sync_switch = self._switch(
-            form, "Sync automatically on launch", self.store.auto_sync_on_launch
+            form, t("checkbox_auto_sync_on_launch"), self.store.auto_sync_on_launch
         )
 
-        self._section_header(form, "Trips")
+        self._section_header(form, t("section_trips"))
         self.min_stop_minutes_field = self._field(
-            form, "Minimum stop duration (minutes)", str(self.store.min_stop_minutes)
+            form, t("label_min_stop_minutes"), str(self.store.min_stop_minutes)
         )
 
         # Same "derived from what's actually configured, not hardcoded" header as
@@ -74,19 +85,19 @@ class SettingsScreen:
         publish_host = self._current_publish_host()
         self._section_header(
             form,
-            f"Publish to {publish_host}" if publish_host else "Publish (not configured)",
+            t("section_publish_configured", host=publish_host) if publish_host else t("section_publish_not_configured"),
         )
         self.auto_publish_switch = self._switch(
-            form, "Publish automatically after building", self.store.auto_publish_after_build
+            form, t("checkbox_auto_publish_after_build"), self.store.auto_publish_after_build
         )
 
-        self.publish_method_selection = toga.Selection(items=_PUBLISH_OPTIONS, style=Pack(margin_top=8))
+        self.publish_method_selection = toga.Selection(items=publish_options, style=Pack(margin_top=8))
         if self.store.is_rest_upload_config_complete:
-            self.publish_method_selection.value = _PUBLISH_WORDPRESS
+            self.publish_method_selection.value = self._publish_wordpress
         elif self.store.is_sftp_config_complete:
-            self.publish_method_selection.value = _PUBLISH_SFTP
+            self.publish_method_selection.value = self._publish_sftp
         else:
-            self.publish_method_selection.value = _PUBLISH_NONE
+            self.publish_method_selection.value = self._publish_none
         self.publish_method_selection.on_change = self._update_publish_method_visibility
         form.add(self.publish_method_selection)
 
@@ -98,81 +109,81 @@ class SettingsScreen:
         # README) matches the Android app's own README wording verbatim.
         self.rest_url_field = self._field(
             self.wordpress_box,
-            "WordPress REST URL",
+            t("label_rest_upload_url"),
             self.store.rest_upload_url,
             placeholder="https://your-site.example/wp-json/nmea2log/v1/logbook",
         )
         self.rest_user_field = self._field(
-            self.wordpress_box, "WordPress username", self.store.rest_upload_user
+            self.wordpress_box, t("label_rest_upload_user"), self.store.rest_upload_user
         )
         self.rest_password_field = self._field(
-            self.wordpress_box, "WordPress application password", self.store.rest_upload_password, is_password=True
+            self.wordpress_box, t("label_rest_upload_password"), self.store.rest_upload_password, is_password=True
         )
         form.add(self.wordpress_box)
 
         self.sftp_box = toga.Box(style=Pack(direction=COLUMN))
-        self.sftp_host_field = self._field(self.sftp_box, "SFTP host", self.store.sftp_host)
-        self.sftp_port_field = self._field(self.sftp_box, "SFTP port", str(self.store.sftp_port))
-        self.sftp_user_field = self._field(self.sftp_box, "SFTP username", self.store.sftp_user)
+        self.sftp_host_field = self._field(self.sftp_box, t("label_sftp_host"), self.store.sftp_host)
+        self.sftp_port_field = self._field(self.sftp_box, t("label_sftp_port"), str(self.store.sftp_port))
+        self.sftp_user_field = self._field(self.sftp_box, t("label_sftp_user"), self.store.sftp_user)
         self.sftp_password_field = self._field(
-            self.sftp_box, "SFTP password", self.store.sftp_password, is_password=True
+            self.sftp_box, t("label_sftp_password"), self.store.sftp_password, is_password=True
         )
         self.sftp_remote_path_field = self._field(
-            self.sftp_box, "SFTP remote path", self.store.sftp_remote_path
+            self.sftp_box, t("label_sftp_remote_path"), self.store.sftp_remote_path
         )
         self.sftp_host_key_field = self._field(
-            self.sftp_box, "SFTP host key fingerprint (optional)", self.store.sftp_host_key_fingerprint
+            self.sftp_box, t("label_sftp_host_key_fingerprint"), self.store.sftp_host_key_fingerprint
         )
         form.add(self.sftp_box)
 
         self._update_publish_method_visibility(self.publish_method_selection)
 
-        self._section_header(form, "Boat mode")
-        form.add(toga.Label("Round interval", style=Pack(margin_top=8)))
-        self.boot_interval_selection = toga.Selection(items=_BOOT_INTERVAL_LABELS)
+        self._section_header(form, t("section_boat_mode"))
+        form.add(toga.Label(t("label_boat_interval"), style=Pack(margin_top=8)))
+        self.boot_interval_selection = toga.Selection(items=boot_interval_labels)
         try:
             index = _BOOT_INTERVAL_MINUTES.index(self.store.boot_round_interval_minutes)
         except ValueError:
             index = 1  # 60 minutes, same fallback as SettingsActivity.kt's own setSelection()
-        self.boot_interval_selection.value = _BOOT_INTERVAL_LABELS[index]
+        self.boot_interval_selection.value = boot_interval_labels[index]
         form.add(self.boot_interval_selection)
         self.boot_publish_every_round_switch = self._switch(
-            form, "Publish after every round", self.store.boot_publish_every_round
+            form, t("checkbox_boat_publish_every_round"), self.store.boot_publish_every_round
         )
         self.boot_final_harbour_switch = self._switch(
-            form, "Final round when back in harbour", self.store.boot_final_on_harbour
+            form, t("checkbox_boat_final_harbour"), self.store.boot_final_on_harbour
         )
         self.boot_harbour_stationary_field = self._field(
-            form, "Harbour: stationary for (minutes)", str(self.store.boot_harbour_stationary_minutes)
+            form, t("label_boat_harbour_stationary_minutes"), str(self.store.boot_harbour_stationary_minutes)
         )
         self.boot_harbour_engine_off_field = self._field(
-            form, "Harbour: engine off for (minutes)", str(self.store.boot_harbour_engine_off_minutes)
+            form, t("label_boat_harbour_engine_off_minutes"), str(self.store.boot_harbour_engine_off_minutes)
         )
         self.boot_final_left_switch = self._switch(
-            form, "Final round when leaving the boat", self.store.boot_final_on_left_boat
+            form, t("checkbox_boat_final_left"), self.store.boot_final_on_left_boat
         )
         self.boot_left_minutes_field = self._field(
-            form, "Away from boat for (minutes)", str(self.store.boot_left_boat_minutes)
+            form, t("label_boat_left_minutes"), str(self.store.boot_left_boat_minutes)
         )
         self.boot_stop_after_final_switch = self._switch(
-            form, "Stop boat mode after the final round", self.store.boot_stop_after_final
+            form, t("checkbox_boat_stop_after_final"), self.store.boot_stop_after_final
         )
         self.boot_auto_start_switch = self._switch(
-            form, "Start boat mode automatically", self.store.boot_auto_start
+            form, t("checkbox_boat_auto_start"), self.store.boot_auto_start
         )
 
         # Same reasoning as SettingsActivity.kt's own clearCacheButton(): two separate buttons,
         # not one "clear everything" -- clearing the wrong cache is real, avoidable extra
         # network/CPU cost.
-        self._section_header(form, "Cache")
+        self._section_header(form, t("section_cache"))
         form.add(
             toga.Button(
-                "Clear data cache", on_press=self._on_clear_data_cache, style=Pack(margin_top=8)
+                t("button_cache_data"), on_press=self._on_clear_data_cache, style=Pack(margin_top=8)
             )
         )
         form.add(
             toga.Button(
-                "Clear places cache", on_press=self._on_clear_places_cache, style=Pack(margin_top=8)
+                t("button_cache_places"), on_press=self._on_clear_places_cache, style=Pack(margin_top=8)
             )
         )
 
@@ -182,8 +193,8 @@ class SettingsScreen:
         # position -- same reasoning as SettingsActivity.kt's own Opslaan button placement
         # (found in practice there: with this many fields, a button living at the bottom of the
         # scrolling list was easy to believe you'd saved without ever actually reaching it).
-        cancel_button = toga.Button("Cancel", on_press=self._on_cancel, style=Pack(flex=1, margin=8))
-        save_button = toga.Button("Save", on_press=self._on_save, style=Pack(flex=1, margin=8))
+        cancel_button = toga.Button(t("button_cancel"), on_press=self._on_cancel, style=Pack(flex=1, margin=8))
+        save_button = toga.Button(t("button_save"), on_press=self._on_save, style=Pack(flex=1, margin=8))
         button_row = toga.Box(children=[cancel_button, save_button], style=Pack(direction=ROW))
 
         self.content = toga.Box(children=[scroll, button_row], style=Pack(direction=COLUMN))
@@ -221,16 +232,12 @@ class SettingsScreen:
         return None
 
     def _update_publish_method_visibility(self, widget):
-        self.wordpress_box.style.display = "pack" if self.publish_method_selection.value == _PUBLISH_WORDPRESS else "none"
-        self.sftp_box.style.display = "pack" if self.publish_method_selection.value == _PUBLISH_SFTP else "none"
+        self.wordpress_box.style.display = "pack" if self.publish_method_selection.value == self._publish_wordpress else "none"
+        self.sftp_box.style.display = "pack" if self.publish_method_selection.value == self._publish_sftp else "none"
 
     async def _on_clear_data_cache(self, widget):
         confirmed = await self.app.main_window.dialog(
-            ConfirmDialog(
-                "Clear data cache",
-                "Deletes the decode/trip cache. The next download or rebuild will re-decode "
-                "every .ebl file from scratch (slower, no data lost).",
-            )
+            ConfirmDialog(t("section_cache"), t("dialog_clear_data_cache_message"))
         )
         if not confirmed:
             return
@@ -242,15 +249,11 @@ class SettingsScreen:
                 shutil.rmtree(path, ignore_errors=True)
             elif path.exists():
                 path.unlink()
-        await self.app.main_window.dialog(InfoDialog("Cache cleared", "Data cache cleared."))
+        await self.app.main_window.dialog(InfoDialog(t("section_cache"), t("toast_cache_cleared")))
 
     async def _on_clear_places_cache(self, widget):
         confirmed = await self.app.main_window.dialog(
-            ConfirmDialog(
-                "Clear places cache",
-                "Deletes the place-name/weather/marine lookup cache. The next download or "
-                "rebuild will re-fetch every lookup (slower, no data lost).",
-            )
+            ConfirmDialog(t("section_cache"), t("dialog_clear_places_cache_message"))
         )
         if not confirmed:
             return
@@ -258,7 +261,7 @@ class SettingsScreen:
             path = self.app.paths.data / name
             if path.exists():
                 path.unlink()
-        await self.app.main_window.dialog(InfoDialog("Cache cleared", "Places cache cleared."))
+        await self.app.main_window.dialog(InfoDialog(t("section_cache"), t("toast_cache_cleared")))
 
     async def _on_cancel(self, widget):
         self.app.show_main_screen()
@@ -266,7 +269,7 @@ class SettingsScreen:
     async def _on_save(self, widget):
         if not self.user_field.value.strip() or not self.password_field.value.strip():
             await self.app.main_window.dialog(
-                ErrorDialog("Missing information", "Fill in the W2K-2 username and password.")
+                ErrorDialog(t("label_w2k2_user"), t("toast_username_password_required"))
             )
             return
 
@@ -280,7 +283,7 @@ class SettingsScreen:
             "min_stop_minutes": _float_or(self.min_stop_minutes_field.value, DEFAULT_MIN_STOP_MINUTES),
             "auto_publish_after_build": self.auto_publish_switch.value,
             "boot_round_interval_minutes": _BOOT_INTERVAL_MINUTES[
-                _BOOT_INTERVAL_LABELS.index(self.boot_interval_selection.value)
+                [t(key) for key in _BOOT_INTERVAL_KEYS].index(self.boot_interval_selection.value)
             ],
             "boot_publish_every_round": self.boot_publish_every_round_switch.value,
             "boot_final_on_harbour": self.boot_final_harbour_switch.value,
@@ -296,7 +299,7 @@ class SettingsScreen:
         # instead of just left untouched, same reasoning as SettingsActivity.kt's own save
         # handler: the radio/selection choice is a real, unambiguous either-or-or-neither rather
         # than just a display filter.
-        if self.publish_method_selection.value == _PUBLISH_WORDPRESS:
+        if self.publish_method_selection.value == self._publish_wordpress:
             fields.update(
                 rest_upload_url=self.rest_url_field.value.strip(),
                 rest_upload_user=self.rest_user_field.value.strip(),
@@ -308,7 +311,7 @@ class SettingsScreen:
                 sftp_remote_path="",
                 sftp_host_key_fingerprint="",
             )
-        elif self.publish_method_selection.value == _PUBLISH_SFTP:
+        elif self.publish_method_selection.value == self._publish_sftp:
             fields.update(
                 rest_upload_url="",
                 rest_upload_user="",

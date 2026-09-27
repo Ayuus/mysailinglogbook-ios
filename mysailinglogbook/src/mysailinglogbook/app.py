@@ -18,6 +18,7 @@ from nmea2log import android_entry
 
 from .settings_screen import SettingsScreen
 from .settings_store import SettingsStore
+from .translations import t
 
 _UIView = ObjCClass("UIView")
 # Standard UIKit UIViewAnimationOptions bit values (not exposed as named constants anywhere in
@@ -110,7 +111,7 @@ class ProgressCallback:
 
     def report(self, current, total, file_name):
         self.app.loop.call_soon_threadsafe(
-            self.app.log, f"[info] Downloading: {current}/{total} ({file_name})"
+            self.app.log, "[info] " + t("log_downloading", current=current, total=total, file_name=file_name)
         )
 
     def isCancelled(self):
@@ -238,30 +239,27 @@ class MySailingLogbook(toga.App):
 
     def on_download(self, widget):
         if self.sync_in_progress:
-            self.log("[info] A sync is already running.")
+            self.log("[info] " + t("log_sync_already_running"))
             return
         if not self.settings_store.is_w2k2_config_complete:
-            self.log("[info] Fill in the W2K-2 username and password in Settings first.")
+            self.log("[info] " + t("log_fill_w2k2_credentials"))
             return
         subnet_prefix = detect_subnet_prefix()
         if subnet_prefix is None:
-            self.log(
-                "[hotspot] No WiFi/hotspot network detected -- turn on Personal Hotspot (or join "
-                "the W2K-2's own network) first."
-            )
+            self.log("[hotspot] " + t("log_no_hotspot"))
             return
-        self.log(f"[info] Checking {subnet_prefix}0/24 for a W2K-2...")
+        self.log("[info] " + t("log_checking_for_w2k2", subnet=subnet_prefix))
         self._start_background(self._run_sync, subnet_prefix, busy_button=self.download_button)
 
     def on_rebuild(self, widget):
         if self.sync_in_progress:
-            self.log("[info] A build is already running.")
+            self.log("[info] " + t("log_build_already_running"))
             return
-        self.log("[info] Building the logbook from files already on this device...")
+        self.log("[info] " + t("log_building_from_local_files"))
         self._start_background(self._run_build_from_local_files, busy_button=self.rebuild_button)
 
     def on_publish(self, widget):
-        self.log("[info] Publish tapped (not implemented yet)")
+        self.log("[info] " + t("log_not_implemented_yet", feature=t("feature_publish")))
 
     def on_view(self, widget):
         # Toggles back to the log -- the logbook itself is already loaded in the WebView from
@@ -274,12 +272,12 @@ class MySailingLogbook(toga.App):
 
         html_path = self.output_html_path()
         if not html_path.exists():
-            self.log("[info] No logbook to show yet.")
+            self.log("[info] " + t("log_no_logbook_to_view"))
             return
         try:
             html = html_path.read_text(encoding="utf-8")
         except OSError as exc:
-            self.log(f"[error] Could not read the logbook: {exc}")
+            self.log("[error] " + t("log_logbook_display_failed", error=exc))
             return
         # Same technique as MainActivity's own loadLogbookIntoWebView(): pass the HTML in as a
         # string with the file's own parent directory as the root/base URL (for any relative
@@ -297,7 +295,7 @@ class MySailingLogbook(toga.App):
         self.content_area.add(self.web_view)
 
     def on_boat_mode(self, widget):
-        self.log("[info] Boat mode tapped (not implemented yet)")
+        self.log("[info] " + t("log_not_implemented_yet", feature=t("feature_boat_mode")))
 
     def on_settings(self, widget):
         self.show_settings_screen()
@@ -394,9 +392,9 @@ class MySailingLogbook(toga.App):
     def _log_result(self, result: dict) -> None:
         def show():
             if result.get("ok"):
-                self.log(f"[ok] Logbook ready ({result.get('trip_count')} trip(s)).")
+                self.log("[ok] " + t("log_logbook_ready", count=result.get("trip_count")))
             elif result.get("cancelled"):
-                self.log("[info] Cancelled.")
+                self.log("[info] " + t("log_cancelled"))
             else:
                 self.log(f"[error] {result.get('error')}")
 
