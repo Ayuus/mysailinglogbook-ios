@@ -11,12 +11,44 @@ import threading
 from pathlib import Path
 
 import toga
+from rubicon.objc import Block, ObjCClass
 from toga.style.pack import COLUMN, ROW, Pack
 
 from nmea2log import android_entry
 
 from .settings_screen import SettingsScreen
 from .settings_store import SettingsStore
+
+_UIView = ObjCClass("UIView")
+# Standard UIKit UIViewAnimationOptions bit values (not exposed as named constants anywhere in
+# toga_iOS -- these are stable, documented Apple values, safe to hardcode).
+_UI_VIEW_ANIMATION_OPTION_REPEAT = 1 << 3
+_UI_VIEW_ANIMATION_OPTION_AUTOREVERSE = 1 << 4
+
+
+def _set_busy_pulse(button, busy: bool) -> None:
+    """Same "something is happening" pulse as Android's own setBusyAppearance() (alpha 1.0 <->
+    0.35, 1500ms each way, repeating indefinitely while busy -- see MainActivity.kt's own doc
+    comment on the exact timing choice). Ported directly against UIKit via rubicon-objc instead
+    of through any Toga cross-platform API -- Toga has no generic opacity-animation concept, and
+    Android's own version is itself platform-native code (a plain ObjectAnimator), not something
+    to abstract over; this is the iOS-native equivalent of the same thing, not a workaround.
+    """
+    native = button._impl.native
+    if busy:
+        def _dim():
+            native.alpha = 0.35
+
+        _UIView.animateWithDuration(
+            1.5,
+            delay=0.0,
+            options=_UI_VIEW_ANIMATION_OPTION_REPEAT | _UI_VIEW_ANIMATION_OPTION_AUTOREVERSE,
+            animations=Block(_dim, None),
+            completion=None,
+        )
+    else:
+        native.layer.removeAllAnimations()
+        native.alpha = 1.0
 
 
 def detect_subnet_prefix():
@@ -163,6 +195,7 @@ class MySailingLogbook(toga.App):
         # plumbing already supports).
         self.sync_in_progress = False
         self.cancel_event = threading.Event()
+        self._busy_button = None
 
         # Same fields/defaults as Android's own SettingsStore, see settings_store.py.
         self.settings_store = SettingsStore(self.paths.data)
@@ -201,14 +234,14 @@ class MySailingLogbook(toga.App):
             )
             return
         self.log(f"[info] Checking {subnet_prefix}0/24 for a W2K-2...")
-        self._start_background(self._run_sync, subnet_prefix)
+        self._start_background(self._run_sync, subnet_prefix, busy_button=self.download_button)
 
     def on_rebuild(self, widget):
         if self.sync_in_progress:
             self.log("[info] A build is already running.")
             return
         self.log("[info] Building the logbook from files already on this device...")
-        self._start_background(self._run_build_from_local_files)
+        self._start_background(self._run_build_from_local_files, busy_button=self.rebuild_button)
 
     def on_publish(self, widget):
         self.log("[info] Publish tapped (not implemented yet)")
@@ -261,10 +294,18 @@ class MySailingLogbook(toga.App):
     def show_main_screen(self) -> None:
         self.main_window.content = self.main_content
 
-    def _start_background(self, target, *args) -> None:
+    def _start_background(self, target, *args, busy_button=None) -> None:
         self.sync_in_progress = True
         self.cancel_event.clear()
+        self._busy_button = busy_button
         self._set_toolbar_enabled(False)
+        if busy_button is not None:
+            # Left enabled (excluded from the disable loop below) -- pulsing a *disabled* button
+            # would fight Toga's own disabled-state dimming, and Android's own equivalent button
+            # deliberately stays enabled too (tapping it again cancels instead -- not ported yet,
+            # so this just re-logs "already running" for now, same as any other button tapped
+            # mid-run, see on_download()/on_rebuild()'s own guards).
+            _set_busy_pulse(busy_button, True)
         threading.Thread(target=self._run_and_finish, args=(target, args), daemon=True).start()
 
     def _run_and_finish(self, target, args) -> None:
@@ -276,20 +317,25 @@ class MySailingLogbook(toga.App):
     def _on_run_finished(self) -> None:
         self.sync_in_progress = False
         self._set_toolbar_enabled(True)
+        if self._busy_button is not None:
+            _set_busy_pulse(self._busy_button, False)
+            self._busy_button = None
 
     def _set_toolbar_enabled(self, enabled: bool) -> None:
         # settings_button and view_button are left out deliberately, matching MainActivity.kt:
         # Settings is its own screen, unaffected by a sync/build in progress; viewLocalLogbook()
         # "works even while a sync is running" (its own doc comment) since it only reads a file
-        # already on disk, never touches SyncState. download_button also stays enabled on
-        # Android (tapping it again cancels instead) -- not ported yet, so it's still disabled
-        # here like the rest.
+        # already on disk, never touches SyncState. The button currently pulsing (self._busy_button,
+        # see _start_background()) is left out too, same reasoning as Android's own busy button
+        # staying enabled.
         for button in (
             self.download_button,
             self.rebuild_button,
             self.publish_button,
             self.boat_mode_button,
         ):
+            if button is self._busy_button:
+                continue
             button.enabled = enabled
 
     # Runs on the background thread started by _start_background() -- must not touch the UI
