@@ -217,21 +217,3 @@ class SettingsStore:
     @property
     def theme_mode(self) -> str:
         return self._values["theme_mode"]
-
-    def boot_mode_config_json(self) -> str:
-        """The boat-mode settings as the JSON nmea2log.bootmode.BootModeConfig.from_dict() takes
-        -- same shape as SettingsStore.kt's own bootModeConfigJson(), for when boat mode itself is
-        ported (not yet -- see MySailingLogbook.on_boat_mode)."""
-        return json.dumps(
-            {
-                "round_interval_minutes": self.boot_round_interval_minutes,
-                "publish_every_round": self.boot_publish_every_round,
-                "final_on_harbour": self.boot_final_on_harbour,
-                "harbour_stationary_minutes": self.boot_harbour_stationary_minutes,
-                "harbour_engine_off_minutes": self.boot_harbour_engine_off_minutes,
-                "final_on_left_boat": self.boot_final_on_left_boat,
-                "left_boat_minutes": self.boot_left_boat_minutes,
-                "stop_after_final": self.boot_stop_after_final,
-                "publish_configured": self.is_rest_upload_config_complete or self.is_sftp_config_complete,
-            }
-        )

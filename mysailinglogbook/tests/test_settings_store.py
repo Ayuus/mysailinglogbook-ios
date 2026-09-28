@@ -1,8 +1,6 @@
 """Tests for settings_store.py -- see that module's own doc comment for why writes go through one
 batched update() call instead of Android's own per-field property setters."""
 
-import json
-
 import pytest
 
 from mysailinglogbook.settings_store import DEFAULT_MIN_STOP_MINUTES, DEFAULT_SFTP_PORT, SettingsStore
@@ -99,23 +97,6 @@ def test_is_sftp_config_complete_needs_all_four_fields(tmp_path):
 
     store.update(sftp_remote_path="/logbook.html")
     assert store.is_sftp_config_complete is True
-
-
-def test_boot_mode_config_json_has_the_shape_bootmode_py_expects(tmp_path):
-    store = SettingsStore(tmp_path)
-    store.update(
-        boot_round_interval_minutes=120,
-        boot_publish_every_round=True,
-        rest_upload_url="https://example.com/wp-json/nmea2log/v1/logbook",
-        rest_upload_user="user",
-        rest_upload_password="pw",
-    )
-
-    config = json.loads(store.boot_mode_config_json())
-
-    assert config["round_interval_minutes"] == 120
-    assert config["publish_every_round"] is True
-    assert config["publish_configured"] is True  # REST upload is now complete
 
 
 def test_theme_mode_defaults_to_system_and_persists(tmp_path):

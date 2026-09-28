@@ -546,25 +546,6 @@ _STRINGS = {
         "SSH-Bibliothek läuft auf dieser Plattform) -- verwenden Sie stattdessen die "
         "WordPress-Veröffentlichung in den Einstellungen.",
     },
-    "log_not_implemented_yet": {
-        # {feature} substituted at call time.
-        "en": "{feature} tapped (not implemented yet)",
-        "nl": "{feature} aangetikt (nog niet gebouwd)",
-        "fr": "{feature} pressé (pas encore implémenté)",
-        "de": "{feature} angetippt (noch nicht implementiert)",
-    },
-    "feature_publish": {
-        "en": "Publish",
-        "nl": "Publiceren",
-        "fr": "Publier",
-        "de": "Veröffentlichen",
-    },
-    "feature_boat_mode": {
-        "en": "Boat mode",
-        "nl": "Boot-modus",
-        "fr": "Mode bateau",
-        "de": "Boot-Modus",
-    },
     "log_no_logbook_to_view": {
         "en": "No logbook to view yet -- download first.",
         "nl": "Nog geen logboek om te bekijken -- download eerst.",
