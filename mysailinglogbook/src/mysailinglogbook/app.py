@@ -11,7 +11,7 @@ from pathlib import Path
 
 import toga
 from rubicon.objc import Block, ObjCClass
-from toga.style.pack import COLUMN, ROW, Pack
+from toga.style.pack import COLUMN, NONE, ROW, Pack
 
 from nmea2log import android_entry
 from nmea2log.upload import UploadError, normalize_rest_upload_url, upload_via_rest
@@ -208,7 +208,7 @@ class MySailingLogbook(toga.App):
         # a file already on disk -- doesn't touch SyncState at all). content_area holds whichever
         # one is currently showing; see _show_log_content()/_show_logbook_content().
         self.log_view = toga.MultilineTextInput(readonly=True, style=Pack(flex=1))
-        self.web_view = toga.WebView(style=Pack(flex=1, display="none"))
+        self.web_view = toga.WebView(style=Pack(flex=0, display="none"))
         self.showing_local_logbook = False
         # Both children stay in content_area permanently -- _show_log_content()/
         # _show_logbook_content() toggle which one is visible (display+visibility, same
@@ -218,6 +218,10 @@ class MySailingLogbook(toga.App):
         # re-adding it (every View tap) left its native UIScrollView's contentOffset reset to
         # the top and unresponsive to further scroll gestures the next time it came back --
         # toga_iOS's own container-attach path isn't built to be run more than once per widget.
+        # flex is toggled too (1 when shown, 0 when hidden) -- display:none alone didn't free up
+        # the space it would have taken in this COLUMN box's own flex distribution (found in
+        # practice: the visible one only got half the screen, with a large blank gap where the
+        # hidden-but-still-flex-1 other one was still being measured).
         self.content_area = toga.Box(children=[self.log_view, self.web_view], style=Pack(flex=1, direction=COLUMN))
 
         # toolbar + content_area -- the "main" screen this swaps back to from Settings (there's
@@ -449,14 +453,22 @@ class MySailingLogbook(toga.App):
     def _show_log_content(self) -> None:
         self.web_view.style.display = "none"
         self.web_view.style.visibility = "hidden"
+        self.web_view.style.flex = 0
+        self.web_view.style.height = 0
         self.log_view.style.display = "pack"
         self.log_view.style.visibility = "visible"
+        self.log_view.style.flex = 1
+        self.log_view.style.height = NONE
 
     def _show_logbook_content(self) -> None:
         self.log_view.style.display = "none"
         self.log_view.style.visibility = "hidden"
+        self.log_view.style.flex = 0
+        self.log_view.style.height = 0
         self.web_view.style.display = "pack"
+        self.web_view.style.height = NONE
         self.web_view.style.visibility = "visible"
+        self.web_view.style.flex = 1
 
     def on_boat_mode(self, widget):
         if self.boot_mode_controller.active:
