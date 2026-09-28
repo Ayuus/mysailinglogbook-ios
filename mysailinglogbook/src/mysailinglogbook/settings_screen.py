@@ -210,27 +210,14 @@ class SettingsScreen:
         # not one "clear everything" -- clearing the wrong cache is real, avoidable extra
         # network/CPU cost.
         self._section_header(form, t("section_cache"))
-        # Background color + rounded corners -- asked for explicitly to look nicer: a plain
-        # toga.Button with no style renders as bare text with no visible button shape at all on
-        # iOS, unlike Android's own outlined, rounded-corner MaterialButton for these same two
-        # actions (see SettingsActivity.kt's own clearCacheButton()). background_color is a
-        # cross-platform Pack style property; corner rounding has no Pack equivalent at all, so
-        # that part goes straight to the native UIButton's own CALayer (see
-        # _round_button_corners() below), same _impl.native pattern used elsewhere in this file.
-        data_cache_button = toga.Button(
-            t("button_cache_data"),
-            on_press=self._on_clear_data_cache,
-            style=Pack(margin_top=8, background_color="#E5E5EA"),
-        )
-        form.add(data_cache_button)
-        self._round_button_corners(data_cache_button)
-        places_cache_button = toga.Button(
-            t("button_cache_places"),
-            on_press=self._on_clear_places_cache,
-            style=Pack(margin_top=8, background_color="#E5E5EA"),
-        )
-        form.add(places_cache_button)
-        self._round_button_corners(places_cache_button)
+        # Same row shape as _switch()'s own label+control pairing -- asked for explicitly, found
+        # in practice: a standalone toga.Button per cache with its own long label ("Cache: Data")
+        # read as an odd, oversized action compared to every switch/field row around it. Now the
+        # descriptive text lives in a plain Label on the left (like a switch's own label), and
+        # the button itself is a small, compact "Clear" on the right -- same visual weight as a
+        # Switch's own control, not a full sentence trying to also be a tappable button.
+        self._cache_row(form, t("button_cache_data"), self._on_clear_data_cache)
+        self._cache_row(form, t("button_cache_places"), self._on_clear_places_cache)
 
         # horizontal=False -- found in practice, asked for explicitly to fix: toga_iOS's own
         # ScrollContainer.content_refreshed() lets the document container grow wider than the
@@ -338,6 +325,25 @@ class SettingsScreen:
         native = button._impl.native
         native.layer.cornerRadius = radius
         native.clipsToBounds = True
+
+    def _cache_row(self, container, label_text, on_press):
+        """A single cache-clear row: descriptive Label on the left (flex=1, same as any other
+        Label here), a small "Clear" toga.Button on the right sized to its own text -- same
+        left-label/right-control shape as _switch(), just with a tap-to-confirm Button standing
+        in for the boolean Switch there.
+        """
+        row = toga.Box(style=Pack(direction=ROW, margin_top=8))
+        row.add(toga.Label(label_text, style=Pack(flex=1)))
+        # width/height close to a native UISwitch's own ~51x31pt footprint -- asked for
+        # explicitly ("zelfde als schuifjes"): matches the control every other row in this
+        # section ends its own row with, rather than either the button's default tiny
+        # sized-to-text self, or an arbitrarily bigger one.
+        button = toga.Button(
+            t("button_clear"), on_press=on_press, style=Pack(width=72, height=32, background_color="#E5E5EA")
+        )
+        self._round_button_corners(button)
+        row.add(button)
+        container.add(row)
 
     def _install_keyboard_avoidance(self, scroll) -> None:
         """Found in practice: toga_iOS's ScrollContainer/TextInput have no keyboard-avoidance of
