@@ -304,26 +304,29 @@ class SettingsScreen:
         container.add(switch)
         return switch
 
-    def _wrap_switch_label(self, switch, max_width=260) -> None:
+    def _wrap_switch_label(self, switch) -> None:
         """toga_iOS's own Switch backend (toga_iOS/widgets/switch.py) uses a plain single-line
-        UILabel with no wrapping -- its own rehint() measures the label with an unconstrained
-        systemLayoutSizeFittingSize(CGSize(0, 0)), so a long label (several of this screen's own
-        checkboxes are full sentences, e.g. "Laatste ronde (publiceren) zodra de boot in de haven
-        ligt") reports its full single-line width as the widget's own intrinsic width -- pushing
-        the whole row, and this screen's own scroll view along with it, wider than the actual
-        device -- found in practice, asked for explicitly to fix: that width mismatch was also
-        corrupting the scroll view's vertical layout, leaving most of the form unreachable.
+        UILabel with no reflow -- its own rehint() measures the label with an unconstrained
+        systemLayoutSizeFittingSize(CGSize(0, 0)), always reporting the label's full single-line
+        width as the widget's own intrinsic width, regardless of numberOfLines/
+        preferredMaxLayoutWidth (those only affect a label already inside a real constrained
+        Auto Layout pass, which this isolated measurement never runs) -- confirmed by toga_iOS's
+        own Label widget (toga_iOS/widgets/label.py), which documents the same constraint by
+        deliberately clipping rather than reflowing and only ever wraps at literal "\n"
+        characters in the text.
 
-        numberOfLines=0 alone isn't enough: a multi-line UILabel's own intrinsicContentSize still
-        reports its unconstrained single-line width unless preferredMaxLayoutWidth is also set --
-        the CGSize(0, 0) rehint() measures with doesn't constrain that on its own. There's no
-        public Toga API for either of these, so both are set directly on the native label
+        So: this only sets numberOfLines=0 (needed so an embedded "\n" actually renders as
+        separate lines instead of being clipped after the first one) -- getting a label to
+        actually take up more than one line at all requires the *text itself* to contain the
+        line break, chosen by hand in translations.py for whichever strings are long enough to
+        overflow at this screen width (found in practice: a long label otherwise pushes the
+        whole row, and this screen's own scroll view along with it, wider than the actual
+        device, which was also corrupting the scroll view's vertical layout). No public Toga
+        API for numberOfLines either, so it's set directly on the native label
         (switch._impl.native_label, toga_iOS's own attribute name for it) -- same _impl.native
         pattern as _template_tint_icon() in app.py.
         """
-        label = switch._impl.native_label
-        label.numberOfLines = 0
-        label.preferredMaxLayoutWidth = max_width
+        switch._impl.native_label.numberOfLines = 0
 
     def _section_header(self, container, text):
         container.add(toga.Label(text, style=Pack(margin_top=16, font_weight="bold")))
