@@ -253,8 +253,19 @@ class MySailingLogbook(toga.App):
         # doc comment), so a fresh launch always starts with it off regardless of whether it was
         # manually stopped last time -- there's no "still running in the background, but the
         # owner turned it off" case here to distinguish, only "on this launch, should it start".
+        # Only one of these two auto-behaviors ever fires on a given launch, same as
+        # MainActivity.kt's own onCreate() branching -- boat mode's own round starts by
+        # downloading itself, so a plain download on top of that would just be redundant.
         if self._should_auto_start_boot_mode():
             self.boot_mode_controller.start()
+        elif self.settings_store.auto_sync_on_launch:
+            self._auto_sync_on_launch()
+        else:
+            # Same fallback as MainActivity.kt's own onCreate() (the "else" branch of its own
+            # settingsStore.autoSyncOnLaunch check) -- shows whatever's already on the phone
+            # right away instead of leaving the log's own placeholder text sitting there doing
+            # nothing until the owner taps something themselves.
+            self.on_view(None)
 
     def _should_auto_start_boot_mode(self) -> bool:
         store = self.settings_store
@@ -263,6 +274,35 @@ class MySailingLogbook(toga.App):
             and store.is_w2k2_config_complete
             and detect_subnet_prefix() is not None
         )
+
+    def _auto_sync_on_launch(self) -> None:
+        """"Automatisch downloaden bij starten" (Settings) -- mirrors MainActivity.kt's own
+        autoStartSyncWithSettingsRetry(), minus its own retry-for-settings-not-loaded-yet loop:
+        that loop exists because Android's SharedPreferences-backed SettingsStore can still be
+        loading asynchronously a few hundred ms after onCreate() starts, but this app's own
+        SettingsStore reads its JSON file synchronously in startup() (see its own call, above,
+        near the very top of this method), fully loaded well before this ever runs -- nothing to
+        retry waiting for here.
+
+        Found in practice: this setting existed, got saved, and had no effect at all -- nothing
+        here ever read it either, the same dead-setting gap _should_auto_start_boot_mode() had.
+        """
+        store = self.settings_store
+        if not store.is_w2k2_config_complete:
+            self.log("[info] " + t("log_fill_w2k2_credentials"))
+            return
+        subnet_prefix = detect_subnet_prefix()
+        if subnet_prefix is None:
+            # Same calm, no-popup treatment as MainActivity.kt's own equivalent branch (a real
+            # Android notification there too, which this app has no equivalent mechanism for at
+            # all -- boat mode's own status lines are all just in-app log() calls, nothing this
+            # reuses for a background system notification).
+            if self.output_html_path().exists():
+                self.on_view(None)
+            self.log("[info] " + t("log_hotspot_precheck_skipped"))
+            return
+        self.log("[info] " + t("log_checking_for_w2k2", subnet=subnet_prefix))
+        self._start_background(self._run_sync, subnet_prefix, busy_button=self.download_button)
 
     def apply_theme_mode(self) -> None:
         """Applies settings_store.theme_mode to the app's own UI (main_window and everything in

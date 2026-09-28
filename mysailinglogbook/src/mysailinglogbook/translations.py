@@ -484,6 +484,12 @@ _STRINGS = {
         "fr": "Recherche d'un W2K-2 sur {subnet}0/24...",
         "de": "Suche nach einem W2K-2 auf {subnet}0/24...",
     },
+    "log_hotspot_precheck_skipped": {
+        "en": "No private network detected (cheap pre-check) -- automatic download skipped.",
+        "nl": "Geen privénetwerk gevonden (snelle controle) -- automatisch downloaden overgeslagen.",
+        "fr": "Aucun réseau privé détecté (vérification rapide) -- téléchargement automatique ignoré.",
+        "de": "Kein privates Netzwerk gefunden (schnelle Vorabprüfung) -- automatischer Download übersprungen.",
+    },
     "log_building_from_local_files": {
         "en": "Assembling logbook with existing data...",
         "nl": "Logboek samenstellen met bestaande data...",
