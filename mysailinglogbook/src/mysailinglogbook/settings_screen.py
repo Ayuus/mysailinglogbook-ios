@@ -22,10 +22,9 @@ comparison identifier (t() is deterministic per process, so this is safe).
 from __future__ import annotations
 
 import toga
-from rubicon.objc import Block, CGSize, NSMakeRect, ObjCClass, UIEdgeInsetsMake, objc_id
+from rubicon.objc import Block, ObjCClass, UIEdgeInsetsMake, objc_id
 from toga.dialogs import ConfirmDialog, ErrorDialog, InfoDialog
 from toga.style.pack import COLUMN, NONE, ROW, Pack
-from travertino.size import at_least
 
 from .settings_store import DEFAULT_MIN_STOP_MINUTES, DEFAULT_SFTP_PORT
 from .translations import t
@@ -34,52 +33,6 @@ _NSNotificationCenter = ObjCClass("NSNotificationCenter")
 
 _BOOT_INTERVAL_MINUTES = [30, 60, 120, 180]
 _BOOT_INTERVAL_KEYS = ["boat_interval_30", "boat_interval_60", "boat_interval_120", "boat_interval_180"]
-
-
-def _patch_switch_rehint_for_multiline_labels() -> None:
-    """toga_iOS's own Switch.rehint() (toga_iOS/widgets/switch.py) measures its label via
-    native_label.systemLayoutSizeFittingSize(CGSize(0, 0)) -- called this way, in isolation,
-    that always reports a single line's height, even once the label's text actually contains
-    literal "\\n" breaks (see _wrap_switch_label() below on why "\\n" is the only way to get
-    multi-line text into a toga_iOS label at all) and numberOfLines is set to allow it: Pack
-    then only ever allocates one line's worth of height for the whole switch row, so every line
-    after the first is really there but silently clipped off in the row's own too-short frame
-    -- found in practice, with the multi-line "\n" breaks from that same fix still visibly
-    cut down to their first line only.
-
-    toga_iOS's own Label widget (toga_iOS/widgets/label.py) measures itself correctly for
-    exactly this case via native.textRectForBounds(rect, limitedToNumberOfLines:) -- a huge
-    (100000x100000) bounding rect with the real line count, which (unlike
-    systemLayoutSizeFittingSize used in isolation) is a plain text-layout query, unaffected by
-    Auto Layout/constraint state. This monkeypatches toga_iOS's own Switch.rehint() to measure
-    its label the exact same way, keeping label and switch widgets consistent. Idempotent
-    (guarded by an attribute on the class itself) since this module can be imported more than
-    once across the app's lifetime (this screen is rebuilt fresh every visit -- see this
-    module's own doc comment).
-    """
-    from toga_iOS.widgets.switch import Switch as toga_switch_impl
-
-    if getattr(toga_switch_impl, "_multiline_rehint_patch_applied", False):
-        return
-
-    def _rehint(self) -> None:
-        text = str(self.native_label.text)
-        num_lines = len(text.split("\n"))
-        label_size = self.native_label.textRectForBounds(
-            NSMakeRect(0, 0, 100_000, 100_000),
-            limitedToNumberOfLines=num_lines,
-        ).size
-        switch_size = self.native_switch.systemLayoutSizeFittingSize(CGSize(0, 0))
-        self.interface.intrinsic.width = at_least(
-            label_size.width + self.SPACING + switch_size.width
-        )
-        self.interface.intrinsic.height = max(label_size.height, switch_size.height)
-
-    toga_switch_impl.rehint = _rehint
-    toga_switch_impl._multiline_rehint_patch_applied = True
-
-
-_patch_switch_rehint_for_multiline_labels()
 
 
 def _int_or(text: str, default: int) -> int:
@@ -271,13 +224,12 @@ class SettingsScreen:
         # ScrollContainer.content_refreshed() lets the document container grow wider than the
         # viewport whenever horizontal scrolling is allowed (its own default), and does so purely
         # to accommodate whatever the content's widest child measures unconstrained -- which for a
-        # long, non-wrapping Label or Switch label (several of this screen's own field
-        # labels/checkboxes are full sentences) is wider than the screen. With horizontal
-        # scrolling off, that same code path instead pins the document container's own width to
-        # the viewport, which is what actually constrains those children's own Auto Layout enough
-        # to wrap/shrink to fit -- not something fixable per-widget (see _wrap_switch_label()'s
-        # own comment: that alone wasn't enough while the container itself still had no width
-        # limit for it to wrap *within*).
+        # long, non-wrapping field Label (several of this screen's own field labels are full
+        # sentences) is wider than the screen. With horizontal scrolling off, that same code path
+        # instead pins the document container's own width to the viewport, which is what actually
+        # constrains those Labels' own Auto Layout enough to wrap. A Switch's own built-in label
+        # is a separate case entirely, not fixable this way -- see _switch_with_wrapped_label()'s
+        # own comment.
         scroll = toga.ScrollContainer(content=form, style=Pack(flex=1), horizontal=False)
 
         # Cancel/Save live outside the scroll area, always visible regardless of scroll
@@ -340,46 +292,27 @@ class SettingsScreen:
             native.text = native.text
 
         switch = toga.Switch(t("checkbox_show_password"), value=False, style=Pack(margin_top=4))
-        self._wrap_switch_label(switch)
         switch.on_change = _on_change
         container.add(switch)
 
     def _switch(self, container, label, initial_value):
+        """toga.Switch's own text setter (toga/widgets/switch.py, toga-core -- not a toga_iOS
+        backend detail) is hardcoded to `value.split("\\n")[0]`, documented as "Only one line of
+        text can be displayed. Any content after the first newline will be ignored." -- true on
+        every platform, not an iOS quirk, and not fixable from a backend at all: confirmed in
+        practice the hard way, a whole chain of iOS-backend attempts (numberOfLines,
+        preferredMaxLayoutWidth, monkeypatched rehint() measuring via sizeThatFits or
+        textRectForBounds, with and without ceil() rounding) all failed identically, because a
+        debug print showed the label's own text already truncated to one line before rehint()
+        ever ran -- well upstream of anything a backend patch could reach. So: every switch
+        label here is kept short enough to actually fit on one line (see translations.py's own
+        checkbox_boat_stop_after_final/checkbox_boat_auto_start for the two that needed
+        shortening for exactly this reason) rather than fighting a restriction toga.Switch
+        itself imposes.
+        """
         switch = toga.Switch(label, value=initial_value, style=Pack(margin_top=8))
-        self._wrap_switch_label(switch)
         container.add(switch)
         return switch
-
-    def _wrap_switch_label(self, switch) -> None:
-        """toga_iOS's own Switch backend (toga_iOS/widgets/switch.py) uses a plain single-line
-        UILabel with no reflow -- its own rehint() measures the label with an unconstrained
-        systemLayoutSizeFittingSize(CGSize(0, 0)), always reporting the label's full single-line
-        width as the widget's own intrinsic width, regardless of numberOfLines/
-        preferredMaxLayoutWidth (those only affect a label already inside a real constrained
-        Auto Layout pass, which this isolated measurement never runs) -- confirmed by toga_iOS's
-        own Label widget (toga_iOS/widgets/label.py), which documents the same constraint by
-        deliberately clipping rather than reflowing and only ever wraps at literal "\\n"
-        characters in the text.
-
-        So: this only sets numberOfLines=0 (needed so an embedded "\\n" actually renders as
-        separate lines instead of being clipped after the first one) -- getting a label to
-        actually take up more than one line at all requires the *text itself* to contain the
-        line break, chosen by hand in translations.py for whichever strings are long enough to
-        overflow at this screen width (found in practice: a long label otherwise pushes the
-        whole row, and this screen's own scroll view along with it, wider than the actual
-        device, which was also corrupting the scroll view's vertical layout). No public Toga
-        API for numberOfLines either, so it's set directly on the native label
-        (switch._impl.native_label, toga_iOS's own attribute name for it) -- same _impl.native
-        pattern as _template_tint_icon() in app.py.
-
-        numberOfLines alone still isn't enough on its own, though: the *row*'s own height also
-        needs to grow to fit those extra lines, which is Switch.rehint()'s job, not this
-        label's -- see _patch_switch_rehint_for_multiline_labels() above for that other half of
-        this same fix (found in practice: without it, an embedded "\\n" is fully wired up here
-        but the row still only reserves one line of height, so every line past the first is
-        just as invisible as it was before, silently clipped off the bottom of its own frame).
-        """
-        switch._impl.native_label.numberOfLines = 0
 
     def _section_header(self, container, text):
         container.add(toga.Label(text, style=Pack(margin_top=16, font_weight="bold")))
