@@ -245,6 +245,25 @@ class MySailingLogbook(toga.App):
         self.cancel_event = threading.Event()
         self._busy_button = None
 
+        # "Boot-modus starten bij openen" (Settings) -- mirrors MainActivity.kt's own
+        # shouldAutoStartBootMode(), called from onCreate(). Found in practice: this setting
+        # existed, got saved, and had no effect at all -- nothing here ever read it. No
+        # "userStopped" tracking needed the way Android's own version has: this app's boat mode
+        # is foreground-only with no persisted state at all (see boot_mode_controller.py's own
+        # doc comment), so a fresh launch always starts with it off regardless of whether it was
+        # manually stopped last time -- there's no "still running in the background, but the
+        # owner turned it off" case here to distinguish, only "on this launch, should it start".
+        if self._should_auto_start_boot_mode():
+            self.boot_mode_controller.start()
+
+    def _should_auto_start_boot_mode(self) -> bool:
+        store = self.settings_store
+        return (
+            store.boot_auto_start
+            and store.is_w2k2_config_complete
+            and detect_subnet_prefix() is not None
+        )
+
     def apply_theme_mode(self) -> None:
         """Applies settings_store.theme_mode to the app's own UI (main_window and everything in
         it, including the log view) -- called once at startup (before main_window.show(), see
