@@ -86,18 +86,11 @@ _STRINGS = {
         "fr": "Publier automatiquement après l'assemblage",
         "de": "Nach dem Zusammenstellen automatisch veröffentlichen",
     },
-    "section_publish_configured": {
-        # {host} substituted at call time -- see t().
-        "en": "Publish to {host}",
-        "nl": "Publiceren naar {host}",
-        "fr": "Publier vers {host}",
-        "de": "Veröffentlichen auf {host}",
-    },
-    "section_publish_not_configured": {
-        "en": "Publish (not configured)",
-        "nl": "Publiceren (niet ingesteld)",
-        "fr": "Publier (non configuré)",
-        "de": "Veröffentlichen (nicht konfiguriert)",
+    "section_publish": {
+        "en": "Publish",
+        "nl": "Publiceren",
+        "fr": "Publier",
+        "de": "Veröffentlichen",
     },
     "radio_publish_none": {
         "en": "Don't publish (local only)",

@@ -40,7 +40,7 @@ def _patch_switch_rehint_for_multiline_labels() -> None:
     """toga_iOS's own Switch.rehint() (toga_iOS/widgets/switch.py) measures its label via
     native_label.systemLayoutSizeFittingSize(CGSize(0, 0)) -- called this way, in isolation,
     that always reports a single line's height, even once the label's text actually contains
-    literal "\n" breaks (see _wrap_switch_label() below on why "\n" is the only way to get
+    literal "\\n" breaks (see _wrap_switch_label() below on why "\\n" is the only way to get
     multi-line text into a toga_iOS label at all) and numberOfLines is set to allow it: Pack
     then only ever allocates one line's worth of height for the whole switch row, so every line
     after the first is really there but silently clipped off in the row's own too-short frame
@@ -129,14 +129,13 @@ class SettingsScreen:
             form, t("label_min_stop_minutes"), str(self.store.min_stop_minutes)
         )
 
-        # Same "derived from what's actually configured, not hardcoded" header as
-        # SettingsActivity.kt's own publishHost logic -- a fresh install with nothing filled in
-        # shouldn't claim a destination that isn't really set up yet.
-        publish_host = self._current_publish_host()
-        self._section_header(
-            form,
-            t("section_publish_configured", host=publish_host) if publish_host else t("section_publish_not_configured"),
-        )
+        # Plain static header -- was "Publish to {host}"/"Publish (not configured)", derived
+        # from what's actually saved to disk, but that read as contradictory/stale the moment
+        # you picked a publish method in the Selection below without having saved yet: the
+        # dropdown said "WordPress" while this header still said "not configured" right above
+        # it (found in practice, asked for explicitly to simplify instead of making the header
+        # itself reactive).
+        self._section_header(form, t("section_publish"))
         self.auto_publish_switch = self._switch(
             form, t("checkbox_auto_publish_after_build"), self.store.auto_publish_after_build
         )
@@ -376,7 +375,7 @@ class SettingsScreen:
         numberOfLines alone still isn't enough on its own, though: the *row*'s own height also
         needs to grow to fit those extra lines, which is Switch.rehint()'s job, not this
         label's -- see _patch_switch_rehint_for_multiline_labels() above for that other half of
-        this same fix (found in practice: without it, an embedded "\n" is fully wired up here
+        this same fix (found in practice: without it, an embedded "\\n" is fully wired up here
         but the row still only reserves one line of height, so every line past the first is
         just as invisible as it was before, silently clipped off the bottom of its own frame).
         """
@@ -433,26 +432,6 @@ class SettingsScreen:
         center = _NSNotificationCenter.defaultCenter
         center.removeObserver(self._keyboard_show_observer)
         center.removeObserver(self._keyboard_hide_observer)
-
-    def _current_publish_host(self):
-        # Normalized first (same call app.py's own _publish_logbook() makes at upload time) --
-        # rest_upload_url is stored as exactly what was typed (see the rest_url_field comment
-        # above), and urlparse("ayuus.com").hostname is None without a scheme: this header would
-        # otherwise misread a validly-configured bare address as "not configured" too.
-        if self.store.rest_upload_url.strip():
-            try:
-                from urllib.parse import urlparse
-
-                from nmea2log.upload import normalize_rest_upload_url
-
-                host = urlparse(normalize_rest_upload_url(self.store.rest_upload_url)).hostname
-                if host:
-                    return host
-            except ValueError:
-                pass
-        if self.store.sftp_host.strip():
-            return self.store.sftp_host
-        return None
 
     def _update_publish_method_visibility(self, widget):
         # Found in practice: Pack's own "display" property (PACK/NONE) alone isn't enough on
