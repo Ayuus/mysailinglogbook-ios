@@ -63,7 +63,7 @@ _STRINGS = {
         "de": "Rufzeichen",
     },
     "checkbox_auto_sync_on_launch": {
-        "en": "Automatically download on launch",
+        "en": "Download automatically on launch",
         "nl": "Automatisch downloaden bij starten",
         "fr": "Télécharger automatiquement au démarrage",
         "de": "Beim Start automatisch herunterladen",
@@ -87,7 +87,7 @@ _STRINGS = {
         "de": "Mindeststandzeit, um als\nHafenbesuch zu zählen (Minuten)",
     },
     "checkbox_auto_publish_after_build": {
-        "en": "Automatically publish after assembling",
+        "en": "Publish automatically after assembling",
         "nl": "Automatisch publiceren na samenstellen",
         "fr": "Publier automatiquement après l'assemblage",
         "de": "Nach dem Zusammenstellen automatisch veröffentlichen",
@@ -249,10 +249,10 @@ _STRINGS = {
         "de": "Nach letzter Runde ausschalten",
     },
     "checkbox_boat_auto_start": {
-        "en": "Auto-start when opened",
-        "nl": "Starten bij openen",
-        "fr": "Démarrer à l'ouverture",
-        "de": "Beim Öffnen starten",
+        "en": "Start automatically on launch",
+        "nl": "Automatisch starten bij openen",
+        "fr": "Démarrer automatiquement au lancement",
+        "de": "Automatisch starten beim Öffnen",
     },
     "boat_status_searching": {
         "en": "Boat mode: looking for the W2K-2...",
