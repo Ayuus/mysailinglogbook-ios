@@ -563,6 +563,14 @@ class MySailingLogbook(toga.App):
             progress_callback=callback,
             min_stop_minutes=self.settings_store.min_stop_minutes,
         )
+        # Same "Automatisch publiceren na samenstellen" gate as MainActivity.kt's own
+        # buildFromLocalFilesAndMaybePublish(forcePublish=false) -- found in practice: this was
+        # missing entirely on iOS, so the setting existed in Settings and got saved, but tapping
+        # Assemble never actually published regardless of it. Before _log_result(), not after --
+        # same reasoning as _run_build_and_publish() above (a publish problem surfacing after the
+        # logbook's already shown would read as a glitch).
+        if result.get("ok") and self.settings_store.auto_publish_after_build:
+            self._publish_logbook()
         self._log_result(result)
 
     # Runs on the background thread started by _start_background() -- see the comment above
@@ -582,6 +590,10 @@ class MySailingLogbook(toga.App):
             progress_callback=callback,
             min_stop_minutes=self.settings_store.min_stop_minutes,
         )
+        # Same gate/ordering as _run_build_from_local_files() above -- also missing entirely
+        # before this, matching MainActivity.kt's own runSync() gate on the same setting.
+        if result.get("ok") and self.settings_store.auto_publish_after_build:
+            self._publish_logbook()
         self._log_result(result)
 
     def _log_result(self, result: dict) -> None:

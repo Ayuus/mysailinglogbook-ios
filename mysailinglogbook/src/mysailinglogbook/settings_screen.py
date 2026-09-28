@@ -312,10 +312,10 @@ class SettingsScreen:
         preferredMaxLayoutWidth (those only affect a label already inside a real constrained
         Auto Layout pass, which this isolated measurement never runs) -- confirmed by toga_iOS's
         own Label widget (toga_iOS/widgets/label.py), which documents the same constraint by
-        deliberately clipping rather than reflowing and only ever wraps at literal "\n"
+        deliberately clipping rather than reflowing and only ever wraps at literal "\\n"
         characters in the text.
 
-        So: this only sets numberOfLines=0 (needed so an embedded "\n" actually renders as
+        So: this only sets numberOfLines=0 (needed so an embedded "\\n" actually renders as
         separate lines instead of being clipped after the first one) -- getting a label to
         actually take up more than one line at all requires the *text itself* to contain the
         line break, chosen by hand in translations.py for whichever strings are long enough to
@@ -420,10 +420,11 @@ class SettingsScreen:
         self.sftp_box.style.display = "pack" if show_sftp else "none"
         self.sftp_box.style.visibility = "visible" if show_sftp else "hidden"
         self.sftp_box.style.height = NONE if show_sftp else 0
-        # "Elke ronde publiceren" only means anything with a publish method actually chosen --
-        # asked for explicitly, found in practice: left enabled with "Niet publiceren" picked, it
-        # read as a real, live setting despite doing nothing at all in that state.
+        # Same reasoning for both: neither means anything with no publish method chosen -- found
+        # in practice, left enabled with "Niet publiceren" picked, they read as real, live
+        # settings despite doing nothing at all in that state.
         self.boot_publish_every_round_switch.enabled = show_wordpress or show_sftp
+        self.auto_publish_switch.enabled = show_wordpress or show_sftp
 
     async def _on_clear_data_cache(self, widget):
         confirmed = await self.app.main_window.dialog(
