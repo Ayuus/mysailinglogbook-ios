@@ -214,10 +214,10 @@ _STRINGS = {
         "de": "Nach jeder Runde veröffentlichen",
     },
     "checkbox_boat_final_harbour": {
-        "en": "Final round (publish) once the boat is in harbour",
-        "nl": "Laatste ronde (publiceren) zodra de boot in de haven ligt",
-        "fr": "Dernière ronde (publication) dès que le bateau est au port",
-        "de": "Letzte Runde (veröffentlichen), sobald das Boot im Hafen liegt",
+        "en": "Final round once the boat is in harbour",
+        "nl": "Laatste ronde zodra de boot in de haven ligt",
+        "fr": "Dernière ronde dès que le bateau est au port",
+        "de": "Letzte Runde, sobald das Boot im Hafen liegt",
     },
     "label_boat_harbour_stationary_minutes": {
         "en": "Harbour: stationary for (minutes)",
