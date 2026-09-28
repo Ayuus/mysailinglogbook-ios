@@ -20,8 +20,8 @@ UI toolkit that can't reproduce something pixel-for-pixel); anything that *can* 
 
 ## Status
 
-**Real app; download/build/view/settings/appearance/language are done, publish and boat mode are
-still placeholders.** The `mysailinglogbook/` directory in this repo is
+**Real app; download/build/view/settings/appearance/language/publish/boat mode are all done and
+working.** The `mysailinglogbook/` directory in this repo is
 the actual [Briefcase](https://github.com/beeware/briefcase)/[Toga](https://github.com/beeware/toga)
 app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
 
@@ -70,8 +70,15 @@ app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
   cream `#F5F1E6` book-with-course-line glyph) -- rendered from one shared SVG
   (`resources/icons-svg/app-icon.svg`) at every size Xcode's `AppIcon.appiconset` and
   `Splash.imageset` need (see "Real gotchas" below for how those sizes actually map).
-- Still placeholders: **Publish** (upload) and **Boat mode** -- both just log
-  "not implemented yet" (`on_publish()`/`on_boat_mode()` in `app.py`).
+- **Publish**: uploads the just-built logbook to a WordPress site over REST
+  (`upload_via_rest()`, `_publish_logbook()` in `app.py`), same REST-preferred-over-SFTP choice as
+  Android's own `LogbookPublisher.kt`. SFTP itself can't be ported to iOS at all (no
+  `cryptography` wheel available for iOS), so picking it shows a clear "not supported" error
+  instead of silently failing.
+- **Boat mode**: drives the same `nmea2log.bootmode.BootModeMachine` state machine Android's own
+  `BootModeController.kt`/`W2kBootExecutor.kt` drive (`boot_mode_controller.py`), foreground-only
+  -- no background-service equivalent, no persisted state across an app close (see that file's own
+  doc comment). The screen stays awake while it's active (`UIApplication.idleTimerDisabled`).
 - `nmea2log` itself (zero third-party dependencies, `requires-python = ">=3.10"`) builds as a
   pure-Python wheel and **imports and runs correctly inside the app on the iOS Simulator**, and
   its full real pipeline (decode -> build trips -> write HTML) has been run against real archive
