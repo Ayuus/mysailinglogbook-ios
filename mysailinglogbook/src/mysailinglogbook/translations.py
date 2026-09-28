@@ -81,10 +81,10 @@ _STRINGS = {
         "de": "Mindeststandzeit, um als Hafenbesuch zu zählen (Minuten)",
     },
     "checkbox_auto_publish_after_build": {
-        "en": "Automatically publish after building",
-        "nl": "Automatisch publiceren na bouwen",
-        "fr": "Publier automatiquement après la construction",
-        "de": "Nach dem Erstellen automatisch veröffentlichen",
+        "en": "Automatically publish after assembling",
+        "nl": "Automatisch publiceren na samenstellen",
+        "fr": "Publier automatiquement après l'assemblage",
+        "de": "Nach dem Zusammenstellen automatisch veröffentlichen",
     },
     "section_publish_configured": {
         # {host} substituted at call time -- see t().
@@ -178,10 +178,10 @@ _STRINGS = {
         "de": "Boot-Modus",
     },
     "label_boat_interval": {
-        "en": "A round (download + build) every",
-        "nl": "Een ronde (downloaden + bouwen) elke",
-        "fr": "Une ronde (télécharger + construire) toutes les",
-        "de": "Eine Runde (Herunterladen + Erstellen) alle",
+        "en": "A round (download + assemble) every",
+        "nl": "Een ronde (downloaden + samenstellen) elke",
+        "fr": "Une ronde (télécharger + assembler) toutes les",
+        "de": "Eine Runde (Herunterladen + Zusammenstellen) alle",
     },
     "boat_interval_30": {
         "en": "30 minutes",
@@ -262,10 +262,10 @@ _STRINGS = {
         "de": "Boot-Modus: Suche nach dem W2K-2...",
     },
     "boat_status_round_started": {
-        "en": "Boat mode: round started (download and build)...",
-        "nl": "Boot-modus: ronde gestart (downloaden en bouwen)...",
-        "fr": "Mode bateau : tour démarré (téléchargement et construction)...",
-        "de": "Boot-Modus: Runde gestartet (Download und Build)...",
+        "en": "Boat mode: round started (download and assemble)...",
+        "nl": "Boot-modus: ronde gestart (downloaden en samenstellen)...",
+        "fr": "Mode bateau : tour démarré (téléchargement et assemblage)...",
+        "de": "Boot-Modus: Runde gestartet (Download und Zusammenstellen)...",
     },
     "boat_status_round_done": {
         # {time} substituted at call time.
@@ -405,25 +405,25 @@ _STRINGS = {
         "de": "Geben Sie den W2K-2-Benutzernamen und das Passwort ein.",
     },
     "dialog_clear_data_cache_message": {
-        "en": "Deletes the decode/trip cache. The next download or build will re-decode every "
+        "en": "Deletes the decode/trip cache. The next download or assembly will re-decode every "
         ".ebl file from scratch (slower, no data lost).",
-        "nl": "Verwijdert de decode-/reizencache. De volgende download of build decodeert elk "
+        "nl": "Verwijdert de decode-/reizencache. De volgende download of samenstelling decodeert elk "
         ".ebl-bestand opnieuw vanaf nul (langzamer, geen dataverlies).",
-        "fr": "Supprime le cache de décodage/trajets. Le prochain téléchargement ou la prochaine "
-        "construction redécodera chaque fichier .ebl depuis le début (plus lent, aucune "
+        "fr": "Supprime le cache de décodage/trajets. Le prochain téléchargement ou le prochain "
+        "assemblage redécodera chaque fichier .ebl depuis le début (plus lent, aucune "
         "perte de données).",
-        "de": "Löscht den Decodier-/Fahrten-Cache. Der nächste Download oder Build decodiert "
+        "de": "Löscht den Decodier-/Fahrten-Cache. Der nächste Download oder die nächste Zusammenstellung decodiert "
         "jede .ebl-Datei von Grund auf neu (langsamer, kein Datenverlust).",
     },
     "dialog_clear_places_cache_message": {
-        "en": "Deletes the place-name/weather/marine lookup cache. The next download or build "
+        "en": "Deletes the place-name/weather/marine lookup cache. The next download or assembly "
         "will re-fetch every lookup (slower, no data lost).",
         "nl": "Verwijdert de cache voor plaatsnamen/weer/getijden. De volgende download of "
-        "build haalt elke opzoeking opnieuw op (langzamer, geen dataverlies).",
+        "samenstelling haalt elke opzoeking opnieuw op (langzamer, geen dataverlies).",
         "fr": "Supprime le cache des noms de lieux/météo/marine. Le prochain téléchargement ou "
-        "la prochaine construction récupérera chaque recherche à nouveau (plus lent, "
+        "le prochain assemblage récupérera chaque recherche à nouveau (plus lent, "
         "aucune perte de données).",
-        "de": "Löscht den Cache für Ortsnamen/Wetter/Gezeiten. Der nächste Download oder Build "
+        "de": "Löscht den Cache für Ortsnamen/Wetter/Gezeiten. Der nächste Download oder die nächste Zusammenstellung "
         "ruft jede Abfrage erneut ab (langsamer, kein Datenverlust).",
     },
     "toast_cache_cleared": {
@@ -445,10 +445,10 @@ _STRINGS = {
         "de": "Es läuft bereits eine Synchronisierung.",
     },
     "log_build_already_running": {
-        "en": "A build is already running.",
-        "nl": "Er loopt al een bouwactie.",
-        "fr": "Une construction est déjà en cours.",
-        "de": "Es läuft bereits ein Build.",
+        "en": "An assembly is already running.",
+        "nl": "Er loopt al een samenstelactie.",
+        "fr": "Un assemblage est déjà en cours.",
+        "de": "Es läuft bereits eine Zusammenstellung.",
     },
     "log_fill_w2k2_credentials": {
         "en": "Fill in the W2K-2 username and password via Settings first.",
@@ -480,10 +480,10 @@ _STRINGS = {
         "de": "Suche nach einem W2K-2 auf {subnet}0/24...",
     },
     "log_building_from_local_files": {
-        "en": "Building logbook with existing data...",
-        "nl": "Logboek bouwen met bestaande data...",
-        "fr": "Construction du carnet avec les données existantes...",
-        "de": "Logbuch mit vorhandenen Daten erstellen...",
+        "en": "Assembling logbook with existing data...",
+        "nl": "Logboek samenstellen met bestaande data...",
+        "fr": "Assemblage du carnet avec les données existantes...",
+        "de": "Logbuch mit vorhandenen Daten zusammenstellen...",
     },
     "log_publish_already_running": {
         "en": "A publish is already running.",
