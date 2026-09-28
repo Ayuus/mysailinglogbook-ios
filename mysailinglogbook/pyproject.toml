@@ -14,6 +14,7 @@ formal_name = "My Sailing Logbook"
 description = "Syncs voyage data from an Actisense W2K-2 into a sailing logbook"
 long_description = """More details about the app should go here.
 """
+icon = "src/mysailinglogbook/resources/icon"
 sources = [
     "src/mysailinglogbook",
 ]
