@@ -456,14 +456,14 @@ _STRINGS = {
         "de": "Der Boot-Modus ist mit einer Runde oder einer Veröffentlichung beschäftigt; versuche es gleich noch einmal.",
     },
     "log_no_hotspot": {
-        "en": "No WiFi/hotspot network detected -- turn on Personal Hotspot (or join the "
+        "en": "No WiFi network detected -- turn on your phone's hotspot (or join the "
         "W2K-2's own network) first.",
-        "nl": "Geen wifi-/hotspotnetwerk gevonden -- zet eerst Persoonlijke Hotspot aan (of "
+        "nl": "Geen wifinetwerk gevonden -- zet eerst de hotspot van je telefoon aan (of "
         "verbind met het eigen netwerk van de W2K-2).",
-        "fr": "Aucun réseau WiFi/point d'accès détecté -- activez d'abord le partage de "
-        "connexion (ou rejoignez le réseau propre du W2K-2).",
-        "de": "Kein WLAN-/Hotspot-Netzwerk gefunden -- schalten Sie zuerst den persönlichen "
-        "Hotspot ein (oder verbinden Sie sich mit dem eigenen Netzwerk des W2K-2).",
+        "fr": "Aucun réseau WiFi détecté -- activez d'abord le partage de connexion de "
+        "votre téléphone (ou rejoignez le réseau propre du W2K-2).",
+        "de": "Kein WLAN-Netzwerk gefunden -- schalten Sie zuerst den Hotspot Ihres "
+        "Telefons ein (oder verbinden Sie sich mit dem eigenen Netzwerk des W2K-2).",
     },
     "log_checking_for_w2k2": {
         # {subnet} substituted at call time.
