@@ -26,6 +26,12 @@ _NSLocale = ObjCClass("NSLocale")
 _SUPPORTED = ("en", "nl", "fr", "de")
 
 _STRINGS = {
+    "section_w2k2_boat": {
+        "en": "W2K-2 & boat",
+        "nl": "W2K-2 & boot",
+        "fr": "W2K-2 et bateau",
+        "de": "W2K-2 & Boot",
+    },
     "label_w2k2_user": {
         "en": "W2K-2 username",
         "nl": "W2K-2 gebruikersnaam",

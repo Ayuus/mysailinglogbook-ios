@@ -66,6 +66,7 @@ class SettingsScreen:
         # top-to-bottom field order as SettingsActivity.kt's own layout.
         form = toga.Box(style=Pack(direction=COLUMN, margin=16))
 
+        self._section_header(form, t("section_w2k2_boat"))
         self.user_field = self._field(form, t("label_w2k2_user"), self.store.w2k2_user)
         self.password_field = self._field(
             form, t("label_w2k2_password"), self.store.w2k2_password, is_password=True
