@@ -210,16 +210,27 @@ class SettingsScreen:
         # not one "clear everything" -- clearing the wrong cache is real, avoidable extra
         # network/CPU cost.
         self._section_header(form, t("section_cache"))
-        form.add(
-            toga.Button(
-                t("button_cache_data"), on_press=self._on_clear_data_cache, style=Pack(margin_top=8)
-            )
+        # Background color + rounded corners -- asked for explicitly to look nicer: a plain
+        # toga.Button with no style renders as bare text with no visible button shape at all on
+        # iOS, unlike Android's own outlined, rounded-corner MaterialButton for these same two
+        # actions (see SettingsActivity.kt's own clearCacheButton()). background_color is a
+        # cross-platform Pack style property; corner rounding has no Pack equivalent at all, so
+        # that part goes straight to the native UIButton's own CALayer (see
+        # _round_button_corners() below), same _impl.native pattern used elsewhere in this file.
+        data_cache_button = toga.Button(
+            t("button_cache_data"),
+            on_press=self._on_clear_data_cache,
+            style=Pack(margin_top=8, background_color="#E5E5EA"),
         )
-        form.add(
-            toga.Button(
-                t("button_cache_places"), on_press=self._on_clear_places_cache, style=Pack(margin_top=8)
-            )
+        form.add(data_cache_button)
+        self._round_button_corners(data_cache_button)
+        places_cache_button = toga.Button(
+            t("button_cache_places"),
+            on_press=self._on_clear_places_cache,
+            style=Pack(margin_top=8, background_color="#E5E5EA"),
         )
+        form.add(places_cache_button)
+        self._round_button_corners(places_cache_button)
 
         # horizontal=False -- found in practice, asked for explicitly to fix: toga_iOS's own
         # ScrollContainer.content_refreshed() lets the document container grow wider than the
@@ -317,6 +328,11 @@ class SettingsScreen:
 
     def _section_header(self, container, text):
         container.add(toga.Label(text, style=Pack(margin_top=20, font_weight="bold", font_size=19)))
+
+    def _round_button_corners(self, button, radius=10) -> None:
+        native = button._impl.native
+        native.layer.cornerRadius = radius
+        native.clipsToBounds = True
 
     def _install_keyboard_avoidance(self, scroll) -> None:
         """Found in practice: toga_iOS's ScrollContainer/TextInput have no keyboard-avoidance of
