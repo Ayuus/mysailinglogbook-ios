@@ -24,7 +24,7 @@ from __future__ import annotations
 import toga
 from rubicon.objc import Block, ObjCClass, UIEdgeInsetsMake, objc_id
 from toga.dialogs import ConfirmDialog, ErrorDialog, InfoDialog
-from toga.style.pack import COLUMN, ROW, Pack
+from toga.style.pack import COLUMN, NONE, ROW, Pack
 
 from .settings_store import DEFAULT_MIN_STOP_MINUTES, DEFAULT_SFTP_PORT
 from .translations import t
@@ -147,8 +147,6 @@ class SettingsScreen:
         )
         form.add(self.sftp_box)
 
-        self._update_publish_method_visibility(self.publish_method_selection)
-
         self._section_header(form, t("section_boat_mode"))
         form.add(toga.Label(t("label_boat_interval"), style=Pack(margin_top=8)))
         self.boot_interval_selection = toga.Selection(items=boot_interval_labels)
@@ -161,6 +159,13 @@ class SettingsScreen:
         self.boot_publish_every_round_switch = self._switch(
             form, t("checkbox_boat_publish_every_round"), self.store.boot_publish_every_round
         )
+        # Only meaningful with a publish method actually chosen -- see
+        # _update_publish_method_visibility()'s own comment on why this one specifically (asked
+        # for explicitly; the harbour/left-the-boat final-round checkboxes below it stay enabled
+        # either way, since that round still builds a fresh local logbook regardless of whether
+        # anywhere is configured to publish it). Called here, after this switch exists, rather
+        # than right after publish_method_selection above -- this is the first call that needs it.
+        self._update_publish_method_visibility(self.publish_method_selection)
         self.boot_final_harbour_switch = self._switch(
             form, t("checkbox_boat_final_harbour"), self.store.boot_final_on_harbour
         )
@@ -216,7 +221,18 @@ class SettingsScreen:
             )
         )
 
-        scroll = toga.ScrollContainer(content=form, style=Pack(flex=1))
+        # horizontal=False -- found in practice, asked for explicitly to fix: toga_iOS's own
+        # ScrollContainer.content_refreshed() lets the document container grow wider than the
+        # viewport whenever horizontal scrolling is allowed (its own default), and does so purely
+        # to accommodate whatever the content's widest child measures unconstrained -- which for a
+        # long, non-wrapping Label or Switch label (several of this screen's own field
+        # labels/checkboxes are full sentences) is wider than the screen. With horizontal
+        # scrolling off, that same code path instead pins the document container's own width to
+        # the viewport, which is what actually constrains those children's own Auto Layout enough
+        # to wrap/shrink to fit -- not something fixable per-widget (see _wrap_switch_label()'s
+        # own comment: that alone wasn't enough while the container itself still had no width
+        # limit for it to wrap *within*).
+        scroll = toga.ScrollContainer(content=form, style=Pack(flex=1), horizontal=False)
 
         # Cancel/Save live outside the scroll area, always visible regardless of scroll
         # position -- same reasoning as SettingsActivity.kt's own Opslaan button placement
@@ -252,8 +268,11 @@ class SettingsScreen:
         if disable_autofill:
             # Tells iOS not to guess what kind of field this is at all, so it never offers a
             # Safari-saved-website/AutoFill suggestion here -- see the WordPress URL field's own
-            # comment on why this matters specifically for that one.
-            native.textContentType = None
+            # comment on why this matters specifically for that one. "" (a real, empty NSString),
+            # not None/nil -- Apple's own documented way to clear an inferred content type; also
+            # sidesteps whatever rubicon-objc does converting a bare Python None into this
+            # property's Optional<NSString> type, untested and not worth the risk here.
+            native.textContentType = ""
         container.add(field)
         if is_password:
             self._add_password_toggle(container, field)
@@ -275,13 +294,36 @@ class SettingsScreen:
             native.text = native.text
 
         switch = toga.Switch(t("checkbox_show_password"), value=False, style=Pack(margin_top=4))
+        self._wrap_switch_label(switch)
         switch.on_change = _on_change
         container.add(switch)
 
     def _switch(self, container, label, initial_value):
         switch = toga.Switch(label, value=initial_value, style=Pack(margin_top=8))
+        self._wrap_switch_label(switch)
         container.add(switch)
         return switch
+
+    def _wrap_switch_label(self, switch, max_width=260) -> None:
+        """toga_iOS's own Switch backend (toga_iOS/widgets/switch.py) uses a plain single-line
+        UILabel with no wrapping -- its own rehint() measures the label with an unconstrained
+        systemLayoutSizeFittingSize(CGSize(0, 0)), so a long label (several of this screen's own
+        checkboxes are full sentences, e.g. "Laatste ronde (publiceren) zodra de boot in de haven
+        ligt") reports its full single-line width as the widget's own intrinsic width -- pushing
+        the whole row, and this screen's own scroll view along with it, wider than the actual
+        device -- found in practice, asked for explicitly to fix: that width mismatch was also
+        corrupting the scroll view's vertical layout, leaving most of the form unreachable.
+
+        numberOfLines=0 alone isn't enough: a multi-line UILabel's own intrinsicContentSize still
+        reports its unconstrained single-line width unless preferredMaxLayoutWidth is also set --
+        the CGSize(0, 0) rehint() measures with doesn't constrain that on its own. There's no
+        public Toga API for either of these, so both are set directly on the native label
+        (switch._impl.native_label, toga_iOS's own attribute name for it) -- same _impl.native
+        pattern as _template_tint_icon() in app.py.
+        """
+        label = switch._impl.native_label
+        label.numberOfLines = 0
+        label.preferredMaxLayoutWidth = max_width
 
     def _section_header(self, container, text):
         container.add(toga.Label(text, style=Pack(margin_top=16, font_weight="bold")))
@@ -302,26 +344,25 @@ class SettingsScreen:
         would otherwise stack up one more (increasingly redundant, but never wrong on its own)
         observer per visit.
 
-        These notifications also fire for a toga.Selection's picker wheel (iOS treats any custom
-        `inputView`, not just the text keyboard, as "the keyboard" for this purpose) -- found in
-        practice, asked for explicitly to fix: opening the publish-method or boat-interval picker
-        covered the Opslaan/Cancel row, which lives *outside* the scroll area (see this class's
-        own __init__) and so isn't helped by the scroll inset above at all. self.content's own
-        bottom margin is adjusted the same way, shifting the whole scroll-area-plus-button-row
-        block up together so the buttons stay above whatever is currently covering the bottom of
-        the screen, keyboard or picker alike.
+        Tried also shifting self.content's own bottom margin (so the Opslaan/Cancel row, which
+        lives *outside* the scroll area, would stay clear of a picker covering it too) -- reverted
+        (asked for explicitly, found in practice): that margin change on self.content -- the box
+        holding *both* the scroll area and the button row -- ended up corrupting the scroll area's
+        own layout after opening the publish-method/boat-interval picker, leaving most of the form
+        unreachable (looked like fields had vanished; they were still there, just outside a
+        miscalculated scrollable region). The scroll view's own contentInset alone, below, is
+        narrower in scope and doesn't have this problem -- it just doesn't reach the button row,
+        which is a smaller, already-known gap, not a new one.
         """
         native = scroll._impl.native
 
         def _on_show(_notification: objc_id) -> None:
             native.contentInset = UIEdgeInsetsMake(0, 0, 300, 0)
             native.scrollIndicatorInsets = UIEdgeInsetsMake(0, 0, 300, 0)
-            self.content.style.margin_bottom = 300
 
         def _on_hide(_notification: objc_id) -> None:
             native.contentInset = UIEdgeInsetsMake(0, 0, 0, 0)
             native.scrollIndicatorInsets = UIEdgeInsetsMake(0, 0, 0, 0)
-            self.content.style.margin_bottom = 0
 
         center = _NSNotificationCenter.defaultCenter
         self._keyboard_show_observer = center.addObserverForName(
@@ -363,12 +404,23 @@ class SettingsScreen:
         # (VISIBLE/HIDDEN) is the property actually wired to the native setHidden() call (see
         # toga's own style/applicator.py), so both are set together here: display for layout
         # sizing, visibility for what actually determines whether the native views draw at all.
+        # height=0 on top of both (same fix content_area's own log/web view toggle needed, see
+        # app.py) -- found in practice, asked for explicitly: even with display+visibility both
+        # set, the collapsed box still reserved its full content height as blank space, since
+        # toga_iOS's own setHidden() behaves like CSS visibility:hidden (invisible, but still
+        # occupying its laid-out frame) rather than actually collapsing to nothing.
         show_wordpress = self.publish_method_selection.value == self._publish_wordpress
         show_sftp = self.publish_method_selection.value == self._publish_sftp
         self.wordpress_box.style.display = "pack" if show_wordpress else "none"
         self.wordpress_box.style.visibility = "visible" if show_wordpress else "hidden"
+        self.wordpress_box.style.height = NONE if show_wordpress else 0
         self.sftp_box.style.display = "pack" if show_sftp else "none"
         self.sftp_box.style.visibility = "visible" if show_sftp else "hidden"
+        self.sftp_box.style.height = NONE if show_sftp else 0
+        # "Elke ronde publiceren" only means anything with a publish method actually chosen --
+        # asked for explicitly, found in practice: left enabled with "Niet publiceren" picked, it
+        # read as a real, live setting despite doing nothing at all in that state.
+        self.boot_publish_every_round_switch.enabled = show_wordpress or show_sftp
 
     async def _on_clear_data_cache(self, widget):
         confirmed = await self.app.main_window.dialog(
