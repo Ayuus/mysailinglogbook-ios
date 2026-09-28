@@ -251,8 +251,13 @@ class SettingsScreen:
         cancel_button = toga.Button(t("button_cancel"), on_press=self._on_cancel, style=Pack(flex=1, margin=8))
         save_button = toga.Button(t("button_save"), on_press=self._on_save, style=Pack(flex=1, margin=8))
         button_row = toga.Box(children=[cancel_button, save_button], style=Pack(direction=ROW))
+        # A plain 1pt line (iOS's own standard systemGray4 separator color) -- asked for
+        # explicitly to fix: with nothing marking the boundary, the scroll area's content just
+        # cut off abruptly right where the fixed Cancel/Save row began, which read as sloppy/
+        # unfinished rather than a deliberate edge.
+        button_row_divider = toga.Box(style=Pack(height=1, background_color="#C6C6C8"))
 
-        self.content = toga.Box(children=[scroll, button_row], style=Pack(direction=COLUMN))
+        self.content = toga.Box(children=[scroll, button_row_divider, button_row], style=Pack(direction=COLUMN))
         self._install_keyboard_avoidance(scroll)
 
     # -- small widget-building helpers, same role as SettingsActivity.kt's own field()/
