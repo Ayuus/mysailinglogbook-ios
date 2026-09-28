@@ -315,7 +315,7 @@ class SettingsScreen:
         return switch
 
     def _section_header(self, container, text):
-        container.add(toga.Label(text, style=Pack(margin_top=16, font_weight="bold")))
+        container.add(toga.Label(text, style=Pack(margin_top=20, font_weight="bold", font_size=19)))
 
     def _install_keyboard_avoidance(self, scroll) -> None:
         """Found in practice: toga_iOS's ScrollContainer/TextInput have no keyboard-avoidance of
