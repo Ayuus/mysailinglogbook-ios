@@ -14,17 +14,46 @@ from rubicon.objc import Block, ObjCClass
 from toga.style.pack import COLUMN, ROW, Pack
 
 from nmea2log import android_entry
+from nmea2log.upload import UploadError, normalize_rest_upload_url, upload_via_rest
 
+from .boot_mode_controller import BootModeController
 from .network import detect_subnet_prefix
 from .settings_screen import SettingsScreen
 from .settings_store import SettingsStore
 from .translations import t
 
+_UIApplication = ObjCClass("UIApplication")
+
+# See MySailingLogbook._trim_log_if_needed()'s own doc comment for why this exists at all.
+_MAX_LOG_LINES = 1000
+
 _UIView = ObjCClass("UIView")
+_UIColor = ObjCClass("UIColor")
 # Standard UIKit UIViewAnimationOptions bit values (not exposed as named constants anywhere in
 # toga_iOS -- these are stable, documented Apple values, safe to hardcode).
 _UI_VIEW_ANIMATION_OPTION_REPEAT = 1 << 3
 _UI_VIEW_ANIMATION_OPTION_AUTOREVERSE = 1 << 4
+# UIImageRenderingMode.alwaysTemplate -- same reasoning as the animation options above.
+_UI_IMAGE_RENDERING_MODE_ALWAYS_TEMPLATE = 2
+
+
+def _template_tint_icon(button) -> None:
+    """toga_iOS's own Button.set_icon() (toga_iOS/widgets/button.py) sets the icon image with
+    UIKit's default rendering mode, which keeps every pixel exactly as rasterized -- solid black,
+    same as Android's vector drawables before tinting. That's invisible against a dark toolbar
+    background, found in practice testing "Apparaat volgen"/"Donker" (see apply_theme_mode()):
+    the title text next to these buttons already adapts automatically (UIKit's own dynamic label
+    color), but the icons didn't move at all.
+
+    Re-applying the same image in "always template" mode instead makes UIKit ignore its own
+    pixels and paint the shape using the button's tintColor -- set to UIColor.labelColor here, the
+    same dynamic black-in-light/white-in-dark color the title text already uses, so both switch
+    together.
+    """
+    native = button._impl.native
+    templated = native.imageForState(0).imageWithRenderingMode(_UI_IMAGE_RENDERING_MODE_ALWAYS_TEMPLATE)
+    native.setImage(templated, forState=0)
+    native.tintColor = _UIColor.labelColor()
 
 
 def _set_busy_pulse(button, busy: bool) -> None:
@@ -50,6 +79,31 @@ def _set_busy_pulse(button, busy: bool) -> None:
     else:
         native.layer.removeAllAnimations()
         native.alpha = 1.0
+
+
+def _set_idle_timer_disabled(disabled: bool) -> None:
+    """Keeps the screen from auto-locking while boat mode is on -- asked for explicitly: boat
+    mode is foreground-only (see this repo's own README on why iOS has no equivalent to Android's
+    foreground service), so the app being suspended when the screen locks would stop it just as
+    surely as closing the app would. As long as the phone is left with the screen on (e.g. propped
+    up at the helm) and the app isn't manually switched away from, this keeps it alive indefinitely
+    despite that limitation.
+
+    UIApplication.sharedApplication is a class-side singleton accessor, the same category as
+    NSNotificationCenter.defaultCenter in settings_screen.py -- rubicon-objc resolved that one as
+    an already-invoked property rather than a bound method (found in practice, the hard way: a
+    trailing () there raised "not callable"). Tried as a property first here for the same reason,
+    falling back to calling it if that guess is wrong for this particular selector, and giving up
+    silently rather than crashing boat mode over what is, worst case, just a missed screen-lock
+    prevention rather than a functional failure.
+    """
+    try:
+        _UIApplication.sharedApplication.idleTimerDisabled = disabled
+    except TypeError:
+        try:
+            _UIApplication.sharedApplication().idleTimerDisabled = disabled
+        except Exception:
+            pass
 
 
 class ProgressCallback:
@@ -88,7 +142,8 @@ class ProgressCallback:
         pass
 
     def onBoatState(self, boat_state_json):
-        pass  # only boat mode needs this (MainActivity's W2kBootExecutor) -- not ported yet
+        pass  # only boat mode needs this; boat_mode_controller.py's own round path builds its
+        # own BoatSnapshot straight from sync_from_w2k2()'s return dict instead of this callback
 
     def onResult(self, ok, error, cancelled, trip_count, html_path, downloaded_count):
         pass  # the pipeline functions' own return value already has everything we need
@@ -96,7 +151,13 @@ class ProgressCallback:
 
 class MySailingLogbook(toga.App):
     def startup(self):
-        # Same order as Android's own toolbar (MainActivity.kt): download, rebuild, publish,
+        # Created before any widget below -- apply_theme_mode() (called right before
+        # main_window.show()) needs it already loaded, so the app's chosen Licht/Donker/Apparaat
+        # appearance is applied on the very first frame instead of flashing the wrong one first.
+        self.settings_store = SettingsStore(self.paths.data)
+        self.boot_mode_controller = BootModeController(self)
+
+        # Same order as Android's own toolbar (MainActivity.kt): download, build, publish,
         # view logbook, boat mode, [flexible spacer], settings. Android's own toolbar buttons
         # are icon-only, no visible text label (see MainActivity.kt's iconButton() helper --
         # tooltip text only, shown on long-press/hover) -- matched here the same way. Icons are
@@ -111,17 +172,26 @@ class MySailingLogbook(toga.App):
         # pushing only Settings to the far right instead of stretching every icon's own slot to
         # fill the toolbar width.
         self.download_button = toga.Button(icon=toga.Icon("resources/download"), on_press=self.on_download)
-        self.rebuild_button = toga.Button(icon=toga.Icon("resources/refresh"), on_press=self.on_rebuild)
+        self.build_button = toga.Button(icon=toga.Icon("resources/refresh"), on_press=self.on_build)
         self.publish_button = toga.Button(icon=toga.Icon("resources/upload"), on_press=self.on_publish)
         self.view_button = toga.Button(icon=toga.Icon("resources/article"), on_press=self.on_view)
         self.boat_mode_button = toga.Button(icon=toga.Icon("resources/sailboat"), on_press=self.on_boat_mode)
         self.settings_button = toga.Button(icon=toga.Icon("resources/settings"), on_press=self.on_settings)
+        for button in (
+            self.download_button,
+            self.build_button,
+            self.publish_button,
+            self.view_button,
+            self.boat_mode_button,
+            self.settings_button,
+        ):
+            _template_tint_icon(button)
 
         toolbar_spacer = toga.Box(style=Pack(flex=1))
         toolbar = toga.Box(
             children=[
                 self.download_button,
-                self.rebuild_button,
+                self.build_button,
                 self.publish_button,
                 self.view_button,
                 self.boat_mode_button,
@@ -138,9 +208,17 @@ class MySailingLogbook(toga.App):
         # a file already on disk -- doesn't touch SyncState at all). content_area holds whichever
         # one is currently showing; see _show_log_content()/_show_logbook_content().
         self.log_view = toga.MultilineTextInput(readonly=True, style=Pack(flex=1))
-        self.web_view = toga.WebView(style=Pack(flex=1))
+        self.web_view = toga.WebView(style=Pack(flex=1, display="none"))
         self.showing_local_logbook = False
-        self.content_area = toga.Box(children=[self.log_view], style=Pack(flex=1, direction=COLUMN))
+        # Both children stay in content_area permanently -- _show_log_content()/
+        # _show_logbook_content() toggle which one is visible (display+visibility, same
+        # mechanism settings_screen.py's own wordpress_box/sftp_box already use) rather than
+        # content_area.clear()+add() swapping which widget is actually attached. Found in
+        # practice, asked for explicitly to fix: removing log_view from its container and
+        # re-adding it (every View tap) left its native UIScrollView's contentOffset reset to
+        # the top and unresponsive to further scroll gestures the next time it came back --
+        # toga_iOS's own container-attach path isn't built to be run more than once per widget.
+        self.content_area = toga.Box(children=[self.log_view, self.web_view], style=Pack(flex=1, direction=COLUMN))
 
         # toolbar + content_area -- the "main" screen this swaps back to from Settings (there's
         # no second toga.Window to switch to on iOS, see settings_screen.py's own doc comment on
@@ -151,6 +229,7 @@ class MySailingLogbook(toga.App):
 
         self.main_window = toga.MainWindow(title=self.formal_name)
         self.main_window.content = self.main_content
+        self.apply_theme_mode()
         self.main_window.show()
 
         # Mirrors SyncState.inProgress/cancelled on Android (MainActivity.runSync()'s own
@@ -162,8 +241,25 @@ class MySailingLogbook(toga.App):
         self.cancel_event = threading.Event()
         self._busy_button = None
 
-        # Same fields/defaults as Android's own SettingsStore, see settings_store.py.
-        self.settings_store = SettingsStore(self.paths.data)
+    def apply_theme_mode(self) -> None:
+        """Applies settings_store.theme_mode to the app's own UI (main_window and everything in
+        it, including the log view) -- called once at startup (before main_window.show(), see
+        the comment there) and again the moment Settings is saved, so a change takes effect
+        immediately rather than needing a relaunch.
+
+        Can't reach the native Launch Screen.storyboard shown before this even runs -- that's a
+        real platform limit, not an oversight (see settings_screen.py's own comment on this
+        section): the storyboard is resolved by iOS itself before any Python code, let alone this
+        method, has run. It still automatically follows the phone's own Appearance setting on its
+        own via UIKit's usual dynamic-color resolution, same as it always has; "Licht"/"Donker"
+        chosen here just doesn't retroactively change that one brief pre-launch frame.
+
+        UIUserInterfaceStyle's raw values (Unspecified=0, Light=1, Dark=2) aren't exposed as named
+        constants anywhere in toga_iOS or rubicon-objc -- stable, documented Apple values, same
+        reasoning as _UI_VIEW_ANIMATION_OPTION_REPEAT/_AUTOREVERSE above for hardcoding them.
+        """
+        style = {"light": 1, "dark": 2}.get(self.settings_store.theme_mode, 0)
+        self.main_window._impl.native.overrideUserInterfaceStyle = style
 
     def log(self, line: str) -> None:
         # Same "only follow along if already at the bottom" behavior as MainActivity's own
@@ -175,8 +271,25 @@ class MySailingLogbook(toga.App):
         # own ScrollContainer backend already reads the same way.
         was_at_bottom = self._log_is_scrolled_to_bottom()
         self.log_view.value += line + "\n"
+        self._trim_log_if_needed()
         if was_at_bottom:
             self.log_view.scroll_to_bottom()
+
+    def _trim_log_if_needed(self) -> None:
+        """Caps the in-app log view at _MAX_LOG_LINES, trimmed back down to it once past double
+        that -- found in practice: an unbounded UITextView.text (Toga's own MultilineTextInput.
+        value setter replaces the *whole* string on every append) turns sluggish, barely
+        scrollable after a long session piles up thousands of decode-progress/retry lines. The
+        full history is never lost -- it's already persisted to nmea2log.log on disk regardless
+        of what this view shows (see android_entry.py's own set_log_file()); this only trims
+        what's kept in memory/on screen. Checked with a hysteresis band (trim only once past
+        double the cap, back down to the cap) rather than every single line, which would mean
+        reconstructing this potentially-large string on every append instead of only rarely.
+        """
+        lines = self.log_view.value.split("\n")
+        if len(lines) <= _MAX_LOG_LINES * 2:
+            return
+        self.log_view.value = "\n".join(lines[-_MAX_LOG_LINES:])
 
     def _log_is_scrolled_to_bottom(self) -> bool:
         native = self.log_view._impl.native
@@ -202,6 +315,9 @@ class MySailingLogbook(toga.App):
         return self.paths.data / "sample_cache.pkl"
 
     def on_download(self, widget):
+        if self.boot_mode_controller.busy:
+            self.log("[info] " + t("log_boat_busy"))
+            return
         if self.sync_in_progress:
             self.log("[info] " + t("log_sync_already_running"))
             return
@@ -210,20 +326,100 @@ class MySailingLogbook(toga.App):
             return
         subnet_prefix = detect_subnet_prefix()
         if subnet_prefix is None:
-            self.log("[hotspot] " + t("log_no_hotspot"))
+            self.log("[info] " + t("log_no_hotspot"))
             return
         self.log("[info] " + t("log_checking_for_w2k2", subnet=subnet_prefix))
         self._start_background(self._run_sync, subnet_prefix, busy_button=self.download_button)
 
-    def on_rebuild(self, widget):
+    def on_build(self, widget):
+        if self.boot_mode_controller.busy:
+            self.log("[info] " + t("log_boat_busy"))
+            return
         if self.sync_in_progress:
             self.log("[info] " + t("log_build_already_running"))
             return
         self.log("[info] " + t("log_building_from_local_files"))
-        self._start_background(self._run_build_from_local_files, busy_button=self.rebuild_button)
+        self._start_background(self._run_build_from_local_files, busy_button=self.build_button)
 
     def on_publish(self, widget):
-        self.log("[info] " + t("log_not_implemented_yet", feature=t("feature_publish")))
+        # Same sequence as MainActivity.kt's own runPublish()/buildFromLocalFilesAndMaybePublish():
+        # always rebuilds fresh from local .ebl data first (not just "upload whatever HTML happens
+        # to already be on disk"), then always publishes regardless of auto_publish_after_build --
+        # an explicit tap of this button is itself the "yes, publish" instruction.
+        if self.boot_mode_controller.busy:
+            self.log("[info] " + t("log_boat_busy"))
+            return
+        if self.sync_in_progress:
+            self.log("[info] " + t("log_publish_already_running"))
+            return
+        store = self.settings_store
+        if not store.is_rest_upload_config_complete and not store.is_sftp_config_complete:
+            self.log("[info] " + t("log_fill_publish_settings"))
+            return
+        self.log("[info] " + t("log_building_from_local_files"))
+        self._start_background(self._run_build_and_publish, busy_button=self.publish_button)
+
+    def _run_build_and_publish(self) -> None:
+        callback = ProgressCallback(self, self.cancel_event)
+        ebl_paths = [str(p) for p in sorted(self.ebl_dir().rglob("*.ebl"))]
+        result = android_entry.build_from_local_files(
+            ebl_paths,
+            str(self.output_html_path()),
+            str(self.sample_cache_path()),
+            self.settings_store.boat_name,
+            self.settings_store.mmsi,
+            self.settings_store.call_sign,
+            progress_callback=callback,
+            min_stop_minutes=self.settings_store.min_stop_minutes,
+        )
+        if result.get("ok"):
+            self._publish_logbook()
+        self._log_result(result)
+
+    def _publish_logbook(self) -> bool:
+        """The actual upload step, run on the same background thread as the build above -- see
+        LogbookPublisher.kt's own publish() for the Android original this mirrors (REST preferred
+        over SFTP whenever both are configured, never falls back silently from one to the other).
+        SFTP itself can't be ported here at all (see translations.py's own
+        log_upload_sftp_not_supported_ios comment on why): every maintained Python SSH library
+        needs the `cryptography` package's compiled C extension, which has no iOS build on PyPI,
+        and cross-compiling OpenSSL/a Rust toolchain for iOS -- or bridging a native Swift SSH
+        library in instead -- is real, separate work, not a quick port.
+
+        Returns whether the upload actually happened and succeeded -- boot_mode_controller.py's
+        own Publish action needs this (same bool LogbookPublisher.kt's own publish() returns) to
+        report PublishFinished back to the state machine; "not configured" is reported as False
+        the same as a real failure would be, matching Android's own publishFailed calculation in
+        MainActivity.buildFromLocalFilesAndMaybePublish() (not configured at all is treated
+        differently there, before ever calling this -- but from *this* function's own point of
+        view, nothing was published either way).
+        """
+        store = self.settings_store
+        use_rest = store.is_rest_upload_config_complete
+        if use_rest:
+            # Expanded here, not stored expanded -- see settings_screen.py's own comment on the
+            # rest_url_field for why: the Settings field always shows exactly what was typed, and
+            # only the actual upload (here) and this log line's own %s ever see the full URL.
+            url = normalize_rest_upload_url(store.rest_upload_url)
+            self.loop.call_soon_threadsafe(self.log, "[info] " + t("status_uploading_wordpress"))
+            try:
+                html_bytes = self.output_html_path().read_bytes()
+                upload_via_rest(html_bytes, url, store.rest_upload_user, store.rest_upload_password)
+            except (UploadError, OSError) as exc:
+                self.loop.call_soon_threadsafe(
+                    self.log, "[error] " + t("log_upload_failed_wordpress", error=str(exc))
+                )
+                return False
+            self.loop.call_soon_threadsafe(
+                self.log, "[ok] " + t("log_upload_ok_wordpress", url=url)
+            )
+            return True
+        elif store.is_sftp_config_complete:
+            self.loop.call_soon_threadsafe(self.log, "[error] " + t("log_upload_sftp_not_supported_ios"))
+            return False
+        else:
+            self.loop.call_soon_threadsafe(self.log, "[skip] " + t("log_upload_not_configured"))
+            return False
 
     def on_view(self, widget):
         # Toggles back to the log -- the logbook itself is already loaded in the WebView from
@@ -251,15 +447,38 @@ class MySailingLogbook(toga.App):
         self._show_logbook_content()
 
     def _show_log_content(self) -> None:
-        self.content_area.clear()
-        self.content_area.add(self.log_view)
+        self.web_view.style.display = "none"
+        self.web_view.style.visibility = "hidden"
+        self.log_view.style.display = "pack"
+        self.log_view.style.visibility = "visible"
 
     def _show_logbook_content(self) -> None:
-        self.content_area.clear()
-        self.content_area.add(self.web_view)
+        self.log_view.style.display = "none"
+        self.log_view.style.visibility = "hidden"
+        self.web_view.style.display = "pack"
+        self.web_view.style.visibility = "visible"
 
     def on_boat_mode(self, widget):
-        self.log("[info] " + t("log_not_implemented_yet", feature=t("feature_boat_mode")))
+        if self.boot_mode_controller.active:
+            self.boot_mode_controller.stop()
+        else:
+            self.boot_mode_controller.start()
+
+    def on_boot_mode_active_changed(self, active: bool) -> None:
+        """Called by BootModeController whenever BootModeMachine's own phase crosses to/from OFF
+        -- not just on a direct tap of the boat button, since e.g. stop_after_final can turn the
+        mode off on its own after a final round, with nobody tapping anything (see
+        boat_mode_controller.py's own BootModeController._handle()).
+
+        Runs on the main thread already (every call into this either starts on the main thread --
+        on_boat_mode() -- or comes back via loop.call_soon_threadsafe() further down the chain),
+        so no thread-marshalling needed here.
+        """
+        self.boat_mode_button.icon = toga.Icon(
+            "resources/sailboat_filled" if active else "resources/sailboat"
+        )
+        _template_tint_icon(self.boat_mode_button)
+        _set_idle_timer_disabled(active)
 
     def on_settings(self, widget):
         self.show_settings_screen()
@@ -283,7 +502,7 @@ class MySailingLogbook(toga.App):
             # would fight Toga's own disabled-state dimming, and Android's own equivalent button
             # deliberately stays enabled too (tapping it again cancels instead -- not ported yet,
             # so this just re-logs "already running" for now, same as any other button tapped
-            # mid-run, see on_download()/on_rebuild()'s own guards).
+            # mid-run, see on_download()/on_build()'s own guards).
             _set_busy_pulse(busy_button, True)
         threading.Thread(target=self._run_and_finish, args=(target, args), daemon=True).start()
 
@@ -309,7 +528,7 @@ class MySailingLogbook(toga.App):
         # staying enabled.
         for button in (
             self.download_button,
-            self.rebuild_button,
+            self.build_button,
             self.publish_button,
             self.boat_mode_button,
         ):

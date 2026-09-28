@@ -116,3 +116,13 @@ def test_boot_mode_config_json_has_the_shape_bootmode_py_expects(tmp_path):
     assert config["round_interval_minutes"] == 120
     assert config["publish_every_round"] is True
     assert config["publish_configured"] is True  # REST upload is now complete
+
+
+def test_theme_mode_defaults_to_system_and_persists(tmp_path):
+    store = SettingsStore(tmp_path)
+    assert store.theme_mode == "system"  # unlike Android's own "dark" default, see _DEFAULTS
+
+    store.update(theme_mode="dark")
+    reloaded = SettingsStore(tmp_path)
+
+    assert reloaded.theme_mode == "dark"

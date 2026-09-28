@@ -22,11 +22,14 @@ comparison identifier (t() is deterministic per process, so this is safe).
 from __future__ import annotations
 
 import toga
+from rubicon.objc import Block, ObjCClass, UIEdgeInsetsMake, objc_id
 from toga.dialogs import ConfirmDialog, ErrorDialog, InfoDialog
 from toga.style.pack import COLUMN, ROW, Pack
 
 from .settings_store import DEFAULT_MIN_STOP_MINUTES, DEFAULT_SFTP_PORT
 from .translations import t
+
+_NSNotificationCenter = ObjCClass("NSNotificationCenter")
 
 _BOOT_INTERVAL_MINUTES = [30, 60, 120, 180]
 _BOOT_INTERVAL_KEYS = ["boat_interval_30", "boat_interval_60", "boat_interval_120", "boat_interval_180"]
@@ -104,14 +107,22 @@ class SettingsScreen:
         self.wordpress_box = toga.Box(style=Pack(direction=COLUMN))
         # Placeholder, not a default value (never saved unless typed) -- same reasoning as
         # SettingsStore.kt's own restUploadUrl doc comment: a brand new install shouldn't show a
-        # real server hostname/path. The exact format (not just the site's own homepage or the
-        # logbook page -- that redirects to a login page instead of uploading, see this repo's
-        # README) matches the Android app's own README wording verbatim.
+        # real server hostname/path. Just the bare site address, not the full REST URL -- stored
+        # exactly as typed (see _on_save() below), never expanded in the field itself; the rest
+        # is filled in via nmea2log.upload.normalize_rest_upload_url() only where the URL is
+        # actually used (app.py's own _publish_logbook()), asked for explicitly: expanding it into
+        # the field at save time meant the field showed something different from what was typed
+        # the next time Settings opened, which read as "I typed X, Y appeared" -- confusing on its
+        # own, and it also made iOS's own AutoFill treat the field as a real saved website once it
+        # held a full URL, offering unrelated saved-site suggestions from Safari (found in
+        # practice: a leftover "stud.com"-ish suggestion that kept coming back). disable_autofill
+        # below stops that regardless of what the field ends up holding.
         self.rest_url_field = self._field(
             self.wordpress_box,
             t("label_rest_upload_url"),
             self.store.rest_upload_url,
-            placeholder="https://your-site.example/wp-json/nmea2log/v1/logbook",
+            placeholder="your-site.example",
+            disable_autofill=True,
         )
         self.rest_user_field = self._field(
             self.wordpress_box, t("label_rest_upload_user"), self.store.rest_upload_user
@@ -172,6 +183,24 @@ class SettingsScreen:
             form, t("checkbox_boat_auto_start"), self.store.boot_auto_start
         )
 
+        # Licht/Donker/Apparaat -- asked for explicitly (this app's own launch screen can't
+        # follow it, since that renders before Python even starts and reads this setting at all;
+        # see app.py's own apply_theme_mode() for what this *does* reach: the app's UI, including
+        # the log screen, applied immediately via UIWindow.overrideUserInterfaceStyle, same choice
+        # Android's own SettingsActivity now offers via AppCompatDelegate).
+        self._section_header(form, t("section_appearance"))
+        self._theme_light = t("radio_theme_light")
+        self._theme_dark = t("radio_theme_dark")
+        self._theme_system = t("radio_theme_system")
+        theme_options = [self._theme_light, self._theme_dark, self._theme_system]
+        self.theme_selection = toga.Selection(items=theme_options, style=Pack(margin_top=8))
+        self.theme_selection.value = {
+            "light": self._theme_light,
+            "dark": self._theme_dark,
+            "system": self._theme_system,
+        }.get(self.store.theme_mode, self._theme_system)
+        form.add(self.theme_selection)
+
         # Same reasoning as SettingsActivity.kt's own clearCacheButton(): two separate buttons,
         # not one "clear everything" -- clearing the wrong cache is real, avoidable extra
         # network/CPU cost.
@@ -198,16 +227,56 @@ class SettingsScreen:
         button_row = toga.Box(children=[cancel_button, save_button], style=Pack(direction=ROW))
 
         self.content = toga.Box(children=[scroll, button_row], style=Pack(direction=COLUMN))
+        self._install_keyboard_avoidance(scroll)
 
     # -- small widget-building helpers, same role as SettingsActivity.kt's own field()/
     # sectionHeader()/checkbox() local functions --
 
-    def _field(self, container, label, initial_value, is_password=False, placeholder=None):
+    def _field(self, container, label, initial_value, is_password=False, placeholder=None, disable_autofill=False):
         container.add(toga.Label(label, style=Pack(margin_top=8)))
         widget_cls = toga.PasswordInput if is_password else toga.TextInput
         field = widget_cls(value=initial_value, placeholder=placeholder)
+        # Every field here is a technical value (URL, host, username, credential) or a short
+        # proper noun (boat name, call sign) -- not a sentence -- so iOS's default "capitalize
+        # the first letter of what looks like a new sentence" is actively wrong on all of them,
+        # not just occasionally (found in practice, asked for explicitly to fix: it kept
+        # recapitalizing the first character of the WordPress URL while typing). UITextField has
+        # no cross-platform Toga API for this -- set directly on the native field, same pattern as
+        # _template_tint_icon() in app.py. Autocorrection off for the same reason (a "corrected"
+        # URL/hostname/username is just wrong, not helpful); spell-checking off too, since it's
+        # the same red-squiggle mechanism working off the same wrong assumption these are words.
+        native = field._impl.native
+        native.autocapitalizationType = 0  # UITextAutocapitalizationTypeNone
+        native.autocorrectionType = 1  # UITextAutocorrectionTypeNo
+        native.spellCheckingType = 1  # UITextSpellCheckingTypeNo
+        if disable_autofill:
+            # Tells iOS not to guess what kind of field this is at all, so it never offers a
+            # Safari-saved-website/AutoFill suggestion here -- see the WordPress URL field's own
+            # comment on why this matters specifically for that one.
+            native.textContentType = None
         container.add(field)
+        if is_password:
+            self._add_password_toggle(container, field)
         return field
+
+    def _add_password_toggle(self, container, field) -> None:
+        """No cross-platform Toga API to reveal a PasswordInput's text -- toggles the native
+        UITextField's own secureTextEntry directly (same _impl.native pattern as the autocap/
+        autocorrect fix above), asked for explicitly (also done for Android's own password
+        fields, via Material's standard end-icon toggle there -- see SettingsActivity.kt's own
+        field()). Reassigning .text to itself right after the toggle works around a well-known
+        UITextField quirk: a secureTextEntry change alone doesn't reliably redraw an
+        already-populated field's current text, only what's typed after the change.
+        """
+        native = field._impl.native
+
+        def _on_change(widget) -> None:
+            native.secureTextEntry = not widget.value
+            native.text = native.text
+
+        switch = toga.Switch(t("checkbox_show_password"), value=False, style=Pack(margin_top=4))
+        switch.on_change = _on_change
+        container.add(switch)
 
     def _switch(self, container, label, initial_value):
         switch = toga.Switch(label, value=initial_value, style=Pack(margin_top=8))
@@ -217,12 +286,68 @@ class SettingsScreen:
     def _section_header(self, container, text):
         container.add(toga.Label(text, style=Pack(margin_top=16, font_weight="bold")))
 
+    def _install_keyboard_avoidance(self, scroll) -> None:
+        """Found in practice: toga_iOS's ScrollContainer/TextInput have no keyboard-avoidance of
+        their own -- with a form this long (W2K-2 login through boat-mode settings), the on-screen
+        keyboard covering a field near the bottom (or the Opslaan/Cancel row below the scroll area
+        entirely) reads as "everything disappeared" the moment you start typing, since there is
+        nothing to scroll the focused field back into view.
+
+        A generous fixed bottom inset while the keyboard is up, rather than reading its exact
+        height out of the notification's userInfo (an NSValue-wrapped CGRect -- an extra struct
+        extraction step over rubicon-objc that isn't needed here), covers every keyboard height in
+        practice; a too-generous inset only ever means a bit of harmless extra empty scroll room,
+        never a hidden field. Observers are removed in _on_cancel()/_on_save() -- this screen is
+        rebuilt fresh every visit (see this module's own doc comment), so leaving them registered
+        would otherwise stack up one more (increasingly redundant, but never wrong on its own)
+        observer per visit.
+
+        These notifications also fire for a toga.Selection's picker wheel (iOS treats any custom
+        `inputView`, not just the text keyboard, as "the keyboard" for this purpose) -- found in
+        practice, asked for explicitly to fix: opening the publish-method or boat-interval picker
+        covered the Opslaan/Cancel row, which lives *outside* the scroll area (see this class's
+        own __init__) and so isn't helped by the scroll inset above at all. self.content's own
+        bottom margin is adjusted the same way, shifting the whole scroll-area-plus-button-row
+        block up together so the buttons stay above whatever is currently covering the bottom of
+        the screen, keyboard or picker alike.
+        """
+        native = scroll._impl.native
+
+        def _on_show(_notification: objc_id) -> None:
+            native.contentInset = UIEdgeInsetsMake(0, 0, 300, 0)
+            native.scrollIndicatorInsets = UIEdgeInsetsMake(0, 0, 300, 0)
+            self.content.style.margin_bottom = 300
+
+        def _on_hide(_notification: objc_id) -> None:
+            native.contentInset = UIEdgeInsetsMake(0, 0, 0, 0)
+            native.scrollIndicatorInsets = UIEdgeInsetsMake(0, 0, 0, 0)
+            self.content.style.margin_bottom = 0
+
+        center = _NSNotificationCenter.defaultCenter
+        self._keyboard_show_observer = center.addObserverForName(
+            "UIKeyboardWillShowNotification", object=None, queue=None, usingBlock=Block(_on_show, None, objc_id)
+        )
+        self._keyboard_hide_observer = center.addObserverForName(
+            "UIKeyboardWillHideNotification", object=None, queue=None, usingBlock=Block(_on_hide, None, objc_id)
+        )
+
+    def _remove_keyboard_avoidance(self) -> None:
+        center = _NSNotificationCenter.defaultCenter
+        center.removeObserver(self._keyboard_show_observer)
+        center.removeObserver(self._keyboard_hide_observer)
+
     def _current_publish_host(self):
+        # Normalized first (same call app.py's own _publish_logbook() makes at upload time) --
+        # rest_upload_url is stored as exactly what was typed (see the rest_url_field comment
+        # above), and urlparse("ayuus.com").hostname is None without a scheme: this header would
+        # otherwise misread a validly-configured bare address as "not configured" too.
         if self.store.rest_upload_url.strip():
             try:
                 from urllib.parse import urlparse
 
-                host = urlparse(self.store.rest_upload_url).hostname
+                from nmea2log.upload import normalize_rest_upload_url
+
+                host = urlparse(normalize_rest_upload_url(self.store.rest_upload_url)).hostname
                 if host:
                     return host
             except ValueError:
@@ -232,8 +357,18 @@ class SettingsScreen:
         return None
 
     def _update_publish_method_visibility(self, widget):
-        self.wordpress_box.style.display = "pack" if self.publish_method_selection.value == self._publish_wordpress else "none"
-        self.sftp_box.style.display = "pack" if self.publish_method_selection.value == self._publish_sftp else "none"
+        # Found in practice: Pack's own "display" property (PACK/NONE) alone isn't enough on
+        # iOS -- toga_iOS's constraint-based layout still rendered the collapsed box's fields,
+        # unlike display:none's usual "removed from layout entirely" behavior. "visibility"
+        # (VISIBLE/HIDDEN) is the property actually wired to the native setHidden() call (see
+        # toga's own style/applicator.py), so both are set together here: display for layout
+        # sizing, visibility for what actually determines whether the native views draw at all.
+        show_wordpress = self.publish_method_selection.value == self._publish_wordpress
+        show_sftp = self.publish_method_selection.value == self._publish_sftp
+        self.wordpress_box.style.display = "pack" if show_wordpress else "none"
+        self.wordpress_box.style.visibility = "visible" if show_wordpress else "hidden"
+        self.sftp_box.style.display = "pack" if show_sftp else "none"
+        self.sftp_box.style.visibility = "visible" if show_sftp else "hidden"
 
     async def _on_clear_data_cache(self, widget):
         confirmed = await self.app.main_window.dialog(
@@ -264,6 +399,7 @@ class SettingsScreen:
         await self.app.main_window.dialog(InfoDialog(t("section_cache"), t("toast_cache_cleared")))
 
     async def _on_cancel(self, widget):
+        self._remove_keyboard_avoidance()
         self.app.show_main_screen()
 
     async def _on_save(self, widget):
@@ -293,6 +429,11 @@ class SettingsScreen:
             "boot_left_boat_minutes": _int_or(self.boot_left_minutes_field.value, 20),
             "boot_stop_after_final": self.boot_stop_after_final_switch.value,
             "boot_auto_start": self.boot_auto_start_switch.value,
+            "theme_mode": {
+                self._theme_light: "light",
+                self._theme_dark: "dark",
+                self._theme_system: "system",
+            }[self.theme_selection.value],
         }
 
         # Only the picked method's fields are actually saved -- the other route(s) are cleared
@@ -337,4 +478,6 @@ class SettingsScreen:
             )
 
         self.store.update(**fields)
+        self.app.apply_theme_mode()
+        self._remove_keyboard_avoidance()
         self.app.show_main_screen()

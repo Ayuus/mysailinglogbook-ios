@@ -60,6 +60,13 @@ _DEFAULTS: Dict[str, Any] = {
     "boot_left_boat_minutes": 20,
     "boot_stop_after_final": False,
     "boot_auto_start": False,
+    # "light" / "dark" / "system" -- see SettingsStore.kt's own themeMode for the Android
+    # equivalent. Defaults to "system" here (not "dark" like Android): this app's UI has always
+    # simply followed whatever UIKit resolves from the phone's own Appearance setting, so "system"
+    # preserves that existing behavior for anyone upgrading, the same reasoning Android's own
+    # "dark" default uses for *its* previous (forced) behavior -- each platform keeps looking the
+    # way it already did until someone opens Settings and picks something else.
+    "theme_mode": "system",
 }
 
 
@@ -206,6 +213,10 @@ class SettingsStore:
     @property
     def boot_auto_start(self) -> bool:
         return self._values["boot_auto_start"]
+
+    @property
+    def theme_mode(self) -> str:
+        return self._values["theme_mode"]
 
     def boot_mode_config_json(self) -> str:
         """The boat-mode settings as the JSON nmea2log.bootmode.BootModeConfig.from_dict() takes

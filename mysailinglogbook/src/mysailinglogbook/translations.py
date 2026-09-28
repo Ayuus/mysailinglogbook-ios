@@ -62,6 +62,12 @@ _STRINGS = {
         "fr": "Télécharger automatiquement au démarrage",
         "de": "Beim Start automatisch herunterladen",
     },
+    "checkbox_show_password": {
+        "en": "Show password",
+        "nl": "Wachtwoord tonen",
+        "fr": "Afficher le mot de passe",
+        "de": "Passwort anzeigen",
+    },
     "section_trips": {
         "en": "Trips",
         "nl": "Reizen",
@@ -112,10 +118,10 @@ _STRINGS = {
         "de": "Über SFTP veröffentlichen",
     },
     "label_rest_upload_url": {
-        "en": "REST upload URL (WordPress)",
-        "nl": "REST upload-URL (WordPress)",
-        "fr": "URL d'envoi REST (WordPress)",
-        "de": "REST-Upload-URL (WordPress)",
+        "en": "WordPress site address",
+        "nl": "WordPress-siteadres",
+        "fr": "Adresse du site WordPress",
+        "de": "WordPress-Website-Adresse",
     },
     "label_rest_upload_user": {
         "en": "WordPress username",
@@ -249,6 +255,118 @@ _STRINGS = {
         "fr": "Démarrer automatiquement quand l'application est ouverte près du W2K-2 (point d'accès activé)",
         "de": "Automatisch starten, wenn die App am W2K-2 geöffnet wird (Hotspot an)",
     },
+    "boat_status_searching": {
+        "en": "Boat mode: looking for the W2K-2...",
+        "nl": "Boot-modus: op zoek naar de W2K-2...",
+        "fr": "Mode bateau : recherche du W2K-2...",
+        "de": "Boot-Modus: Suche nach dem W2K-2...",
+    },
+    "boat_status_round_started": {
+        "en": "Boat mode: round started (download and build)...",
+        "nl": "Boot-modus: ronde gestart (downloaden en bouwen)...",
+        "fr": "Mode bateau : tour démarré (téléchargement et construction)...",
+        "de": "Boot-Modus: Runde gestartet (Download und Build)...",
+    },
+    "boat_status_round_done": {
+        # {time} substituted at call time.
+        "en": "Boat mode: round done, next round at {time}.",
+        "nl": "Boot-modus: ronde klaar, volgende ronde om {time}.",
+        "fr": "Mode bateau : tour terminé, prochain tour à {time}.",
+        "de": "Boot-Modus: Runde abgeschlossen, nächste Runde um {time}.",
+    },
+    "boat_status_round_failed": {
+        "en": "Boat mode: round failed, trying again.",
+        "nl": "Boot-modus: ronde mislukt, wordt opnieuw geprobeerd.",
+        "fr": "Mode bateau : tour échoué, nouvelle tentative en cours.",
+        "de": "Boot-Modus: Runde fehlgeschlagen, wird erneut versucht.",
+    },
+    "boat_status_w2k2_not_found_retry": {
+        # {time} substituted at call time.
+        "en": "Boat mode: W2K-2 not reachable, trying again at {time}.",
+        "nl": "Boot-modus: W2K-2 niet bereikbaar, nieuwe poging om {time}.",
+        "fr": "Mode bateau : W2K-2 injoignable, nouvelle tentative à {time}.",
+        "de": "Boot-Modus: W2K-2 nicht erreichbar, nächster Versuch um {time}.",
+    },
+    "boat_status_harbour_final": {
+        "en": "Boat mode: the boat is in harbour, final round.",
+        "nl": "Boot-modus: de boot ligt in de haven, laatste ronde.",
+        "fr": "Mode bateau : le bateau est au port, dernier tour.",
+        "de": "Boot-Modus: das Boot liegt im Hafen, letzte Runde.",
+    },
+    "boat_status_left_boat": {
+        "en": "Boat mode: left the boat (W2K-2 gone), final round.",
+        "nl": "Boot-modus: de boot verlaten (W2K-2 weg), laatste ronde.",
+        "fr": "Mode bateau : bateau quitté (W2K-2 disparu), dernier tour.",
+        "de": "Boot-Modus: Boot verlassen (W2K-2 weg), letzte Runde.",
+    },
+    "boat_status_left_boat_nothing": {
+        "en": "Boat mode: left the boat, nothing new to publish.",
+        "nl": "Boot-modus: de boot verlaten, niets nieuws te publiceren.",
+        "fr": "Mode bateau : bateau quitté, rien de nouveau à publier.",
+        "de": "Boot-Modus: Boot verlassen, nichts Neues zu veröffentlichen.",
+    },
+    "boat_status_waiting_in_port": {
+        # {time} substituted at call time.
+        "en": "Boat mode: waiting in port, next check at {time}.",
+        "nl": "Boot-modus: wachten in de haven, volgende controle om {time}.",
+        "fr": "Mode bateau : attente au port, prochaine vérification à {time}.",
+        "de": "Boot-Modus: warte im Hafen, nächste Prüfung um {time}.",
+    },
+    "boat_status_publish_started": {
+        "en": "Boat mode: publishing...",
+        "nl": "Boot-modus: publiceren...",
+        "fr": "Mode bateau : publication...",
+        "de": "Boot-Modus: wird veröffentlicht...",
+    },
+    "boat_status_publish_ok": {
+        "en": "Boat mode: published.",
+        "nl": "Boot-modus: gepubliceerd.",
+        "fr": "Mode bateau : publié.",
+        "de": "Boot-Modus: veröffentlicht.",
+    },
+    "boat_status_publish_failed": {
+        # {time} substituted at call time.
+        "en": "Boat mode: publishing failed, trying again at {time}.",
+        "nl": "Boot-modus: publiceren mislukt, nieuwe poging om {time}.",
+        "fr": "Mode bateau : échec de la publication, nouvelle tentative à {time}.",
+        "de": "Boot-Modus: Veröffentlichung fehlgeschlagen, nächster Versuch um {time}.",
+    },
+    "boat_status_stopped": {
+        "en": "Boat mode stopped.",
+        "nl": "Boot-modus gestopt.",
+        "fr": "Mode bateau arrêté.",
+        "de": "Boot-Modus gestoppt.",
+    },
+    "tooltip_boat_mode_on": {
+        "en": "Stop boat mode",
+        "nl": "Boot-modus stoppen",
+        "fr": "Arrêter le mode bateau",
+        "de": "Boot-Modus stoppen",
+    },
+    "section_appearance": {
+        "en": "Appearance",
+        "nl": "Weergave",
+        "fr": "Apparence",
+        "de": "Darstellung",
+    },
+    "radio_theme_light": {
+        "en": "Light",
+        "nl": "Licht",
+        "fr": "Clair",
+        "de": "Hell",
+    },
+    "radio_theme_dark": {
+        "en": "Dark",
+        "nl": "Donker",
+        "fr": "Sombre",
+        "de": "Dunkel",
+    },
+    "radio_theme_system": {
+        "en": "Follow device",
+        "nl": "Apparaat volgen",
+        "fr": "Suivre l'appareil",
+        "de": "Gerät folgen",
+    },
     "section_cache": {
         "en": "Clear cache",
         "nl": "Cache legen",
@@ -287,25 +405,25 @@ _STRINGS = {
         "de": "Geben Sie den W2K-2-Benutzernamen und das Passwort ein.",
     },
     "dialog_clear_data_cache_message": {
-        "en": "Deletes the decode/trip cache. The next download or rebuild will re-decode every "
+        "en": "Deletes the decode/trip cache. The next download or build will re-decode every "
         ".ebl file from scratch (slower, no data lost).",
-        "nl": "Verwijdert de decode-/reizencache. De volgende download of rebuild decodeert elk "
+        "nl": "Verwijdert de decode-/reizencache. De volgende download of build decodeert elk "
         ".ebl-bestand opnieuw vanaf nul (langzamer, geen dataverlies).",
         "fr": "Supprime le cache de décodage/trajets. Le prochain téléchargement ou la prochaine "
-        "reconstruction redécodera chaque fichier .ebl depuis le début (plus lent, aucune "
+        "construction redécodera chaque fichier .ebl depuis le début (plus lent, aucune "
         "perte de données).",
-        "de": "Löscht den Decodier-/Fahrten-Cache. Der nächste Download oder Rebuild decodiert "
+        "de": "Löscht den Decodier-/Fahrten-Cache. Der nächste Download oder Build decodiert "
         "jede .ebl-Datei von Grund auf neu (langsamer, kein Datenverlust).",
     },
     "dialog_clear_places_cache_message": {
-        "en": "Deletes the place-name/weather/marine lookup cache. The next download or rebuild "
+        "en": "Deletes the place-name/weather/marine lookup cache. The next download or build "
         "will re-fetch every lookup (slower, no data lost).",
         "nl": "Verwijdert de cache voor plaatsnamen/weer/getijden. De volgende download of "
-        "rebuild haalt elke opzoeking opnieuw op (langzamer, geen dataverlies).",
+        "build haalt elke opzoeking opnieuw op (langzamer, geen dataverlies).",
         "fr": "Supprime le cache des noms de lieux/météo/marine. Le prochain téléchargement ou "
-        "la prochaine reconstruction récupérera chaque recherche à nouveau (plus lent, "
+        "la prochaine construction récupérera chaque recherche à nouveau (plus lent, "
         "aucune perte de données).",
-        "de": "Löscht den Cache für Ortsnamen/Wetter/Gezeiten. Der nächste Download oder Rebuild "
+        "de": "Löscht den Cache für Ortsnamen/Wetter/Gezeiten. Der nächste Download oder Build "
         "ruft jede Abfrage erneut ab (langsamer, kein Datenverlust).",
     },
     "toast_cache_cleared": {
@@ -338,6 +456,12 @@ _STRINGS = {
         "fr": "Renseignez d'abord le nom d'utilisateur et le mot de passe W2K-2 via les Paramètres.",
         "de": "Geben Sie zuerst den W2K-2-Benutzernamen und das Passwort über die Einstellungen ein.",
     },
+    "log_boat_busy": {
+        "en": "Boat mode is busy with a round or a publish; try again in a moment.",
+        "nl": "Boot-modus is bezig met een ronde of publicatie; probeer het zo weer.",
+        "fr": "Le mode bateau est occupé avec un tour ou une publication ; réessayez dans un instant.",
+        "de": "Der Boot-Modus ist mit einer Runde oder einer Veröffentlichung beschäftigt; versuche es gleich noch einmal.",
+    },
     "log_no_hotspot": {
         "en": "No WiFi/hotspot network detected -- turn on Personal Hotspot (or join the "
         "W2K-2's own network) first.",
@@ -360,6 +484,56 @@ _STRINGS = {
         "nl": "Logboek bouwen met bestaande data...",
         "fr": "Construction du carnet avec les données existantes...",
         "de": "Logbuch mit vorhandenen Daten erstellen...",
+    },
+    "log_publish_already_running": {
+        "en": "A publish is already running.",
+        "nl": "Er loopt al een publicatie.",
+        "fr": "Une publication est déjà en cours.",
+        "de": "Es läuft bereits eine Veröffentlichung.",
+    },
+    "log_fill_publish_settings": {
+        "en": "Fill in the publish settings (WordPress) via Settings first.",
+        "nl": "Vul eerst de publiceer-instellingen (WordPress) in via Instellingen.",
+        "fr": "Renseignez d'abord les paramètres de publication (WordPress) dans les Paramètres.",
+        "de": "Trage zuerst die Veröffentlichungseinstellungen (WordPress) in den Einstellungen ein.",
+    },
+    "status_uploading_wordpress": {
+        "en": "Uploading (to WordPress)...",
+        "nl": "Uploaden (naar WordPress)...",
+        "fr": "Envoi (vers WordPress)...",
+        "de": "Wird hochgeladen (zu WordPress)...",
+    },
+    "log_upload_ok_wordpress": {
+        # {url} substituted at call time.
+        "en": "Uploaded to WordPress: {url}",
+        "nl": "Geüpload naar WordPress: {url}",
+        "fr": "Envoyé vers WordPress : {url}",
+        "de": "Zu WordPress hochgeladen: {url}",
+    },
+    "log_upload_failed_wordpress": {
+        # {error} substituted at call time.
+        "en": "upload to WordPress failed: {error}",
+        "nl": "upload naar WordPress mislukt: {error}",
+        "fr": "l'envoi vers WordPress a échoué : {error}",
+        "de": "Hochladen zu WordPress fehlgeschlagen: {error}",
+    },
+    "log_upload_not_configured": {
+        "en": "Upload not configured",
+        "nl": "Upload niet ingesteld",
+        "fr": "Envoi non configuré",
+        "de": "Upload nicht konfiguriert",
+    },
+    "log_upload_sftp_not_supported_ios": {
+        "en": "SFTP publishing isn't supported on iOS yet (no SSH library that runs on this "
+        "platform) -- switch to WordPress REST publishing in Settings instead.",
+        "nl": "Publiceren via SFTP wordt nog niet ondersteund op iOS (geen SSH-library die op "
+        "dit platform werkt) -- gebruik in plaats daarvan WordPress-publiceren via Instellingen.",
+        "fr": "La publication par SFTP n'est pas encore prise en charge sur iOS (aucune "
+        "bibliothèque SSH ne fonctionne sur cette plateforme) -- utilisez plutôt la "
+        "publication WordPress dans les Paramètres.",
+        "de": "Veröffentlichen über SFTP wird auf iOS noch nicht unterstützt (keine "
+        "SSH-Bibliothek läuft auf dieser Plattform) -- verwenden Sie stattdessen die "
+        "WordPress-Veröffentlichung in den Einstellungen.",
     },
     "log_not_implemented_yet": {
         # {feature} substituted at call time.
