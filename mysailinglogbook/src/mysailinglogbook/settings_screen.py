@@ -22,9 +22,10 @@ comparison identifier (t() is deterministic per process, so this is safe).
 from __future__ import annotations
 
 import toga
-from rubicon.objc import Block, ObjCClass, UIEdgeInsetsMake, objc_id
+from rubicon.objc import Block, CGSize, NSMakeRect, ObjCClass, UIEdgeInsetsMake, objc_id
 from toga.dialogs import ConfirmDialog, ErrorDialog, InfoDialog
 from toga.style.pack import COLUMN, NONE, ROW, Pack
+from travertino.size import at_least
 
 from .settings_store import DEFAULT_MIN_STOP_MINUTES, DEFAULT_SFTP_PORT
 from .translations import t
@@ -33,6 +34,52 @@ _NSNotificationCenter = ObjCClass("NSNotificationCenter")
 
 _BOOT_INTERVAL_MINUTES = [30, 60, 120, 180]
 _BOOT_INTERVAL_KEYS = ["boat_interval_30", "boat_interval_60", "boat_interval_120", "boat_interval_180"]
+
+
+def _patch_switch_rehint_for_multiline_labels() -> None:
+    """toga_iOS's own Switch.rehint() (toga_iOS/widgets/switch.py) measures its label via
+    native_label.systemLayoutSizeFittingSize(CGSize(0, 0)) -- called this way, in isolation,
+    that always reports a single line's height, even once the label's text actually contains
+    literal "\n" breaks (see _wrap_switch_label() below on why "\n" is the only way to get
+    multi-line text into a toga_iOS label at all) and numberOfLines is set to allow it: Pack
+    then only ever allocates one line's worth of height for the whole switch row, so every line
+    after the first is really there but silently clipped off in the row's own too-short frame
+    -- found in practice, with the multi-line "\n" breaks from that same fix still visibly
+    cut down to their first line only.
+
+    toga_iOS's own Label widget (toga_iOS/widgets/label.py) measures itself correctly for
+    exactly this case via native.textRectForBounds(rect, limitedToNumberOfLines:) -- a huge
+    (100000x100000) bounding rect with the real line count, which (unlike
+    systemLayoutSizeFittingSize used in isolation) is a plain text-layout query, unaffected by
+    Auto Layout/constraint state. This monkeypatches toga_iOS's own Switch.rehint() to measure
+    its label the exact same way, keeping label and switch widgets consistent. Idempotent
+    (guarded by an attribute on the class itself) since this module can be imported more than
+    once across the app's lifetime (this screen is rebuilt fresh every visit -- see this
+    module's own doc comment).
+    """
+    from toga_iOS.widgets.switch import Switch as toga_switch_impl
+
+    if getattr(toga_switch_impl, "_multiline_rehint_patch_applied", False):
+        return
+
+    def _rehint(self) -> None:
+        text = str(self.native_label.text)
+        num_lines = len(text.split("\n"))
+        label_size = self.native_label.textRectForBounds(
+            NSMakeRect(0, 0, 100_000, 100_000),
+            limitedToNumberOfLines=num_lines,
+        ).size
+        switch_size = self.native_switch.systemLayoutSizeFittingSize(CGSize(0, 0))
+        self.interface.intrinsic.width = at_least(
+            label_size.width + self.SPACING + switch_size.width
+        )
+        self.interface.intrinsic.height = max(label_size.height, switch_size.height)
+
+    toga_switch_impl.rehint = _rehint
+    toga_switch_impl._multiline_rehint_patch_applied = True
+
+
+_patch_switch_rehint_for_multiline_labels()
 
 
 def _int_or(text: str, default: int) -> int:
@@ -325,6 +372,13 @@ class SettingsScreen:
         API for numberOfLines either, so it's set directly on the native label
         (switch._impl.native_label, toga_iOS's own attribute name for it) -- same _impl.native
         pattern as _template_tint_icon() in app.py.
+
+        numberOfLines alone still isn't enough on its own, though: the *row*'s own height also
+        needs to grow to fit those extra lines, which is Switch.rehint()'s job, not this
+        label's -- see _patch_switch_rehint_for_multiline_labels() above for that other half of
+        this same fix (found in practice: without it, an embedded "\n" is fully wired up here
+        but the row still only reserves one line of height, so every line past the first is
+        just as invisible as it was before, silently clipped off the bottom of its own frame).
         """
         switch._impl.native_label.numberOfLines = 0
 
