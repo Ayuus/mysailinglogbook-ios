@@ -395,9 +395,10 @@ class MySailingLogbook(toga.App):
             progress_callback=callback,
             min_stop_minutes=self.settings_store.min_stop_minutes,
         )
+        publish_failed = False
         if result.get("ok"):
-            self._publish_logbook()
-        self._log_result(result)
+            publish_failed = not self._publish_logbook()
+        self._log_result(result, show_logbook_on_success=not publish_failed)
 
     def _publish_logbook(self) -> bool:
         """The actual upload step, run on the same background thread as the build above -- see
@@ -528,6 +529,15 @@ class MySailingLogbook(toga.App):
         self.cancel_event.clear()
         self._busy_button = busy_button
         self._set_toolbar_enabled(False)
+        # Same reset as MainActivity.kt's own buildFromLocalFilesAndMaybePublish()/runSync()
+        # (showingLocalLogbook = false at the start of every run) -- found in practice, missing
+        # here before this: starting a new download/assemble/publish while the previous run's
+        # logbook was still on screen left it there with no visible sign anything was
+        # happening, so a second run looked like it silently did nothing until you manually
+        # switched back to the log yourself.
+        if self.showing_local_logbook:
+            self.showing_local_logbook = False
+            self._show_log_content()
         if busy_button is not None:
             # Left enabled (excluded from the disable loop below) -- pulsing a *disabled* button
             # would fight Toga's own disabled-state dimming, and Android's own equivalent button
@@ -587,10 +597,12 @@ class MySailingLogbook(toga.App):
         # missing entirely on iOS, so the setting existed in Settings and got saved, but tapping
         # Assemble never actually published regardless of it. Before _log_result(), not after --
         # same reasoning as _run_build_and_publish() above (a publish problem surfacing after the
-        # logbook's already shown would read as a glitch).
+        # logbook's already shown would read as a glitch) -- see _log_result()'s own
+        # show_logbook_on_success param, which is what actually shows it.
+        publish_failed = False
         if result.get("ok") and self.settings_store.auto_publish_after_build:
-            self._publish_logbook()
-        self._log_result(result)
+            publish_failed = not self._publish_logbook()
+        self._log_result(result, show_logbook_on_success=not publish_failed)
 
     # Runs on the background thread started by _start_background() -- see the comment above
     # _run_build_from_local_files().
@@ -611,14 +623,28 @@ class MySailingLogbook(toga.App):
         )
         # Same gate/ordering as _run_build_from_local_files() above -- also missing entirely
         # before this, matching MainActivity.kt's own runSync() gate on the same setting.
+        publish_failed = False
         if result.get("ok") and self.settings_store.auto_publish_after_build:
-            self._publish_logbook()
-        self._log_result(result)
+            publish_failed = not self._publish_logbook()
+        self._log_result(result, show_logbook_on_success=not publish_failed)
 
-    def _log_result(self, result: dict) -> None:
+    def _log_result(self, result: dict, show_logbook_on_success: bool = True) -> None:
+        """show_logbook_on_success mirrors MainActivity.kt's own showSyncResult(): on a
+        successful build (download, local assemble, or publish alike), the fresh logbook is
+        shown automatically, same as Android already does -- found in practice, missing
+        entirely here before this: iOS just stayed on the log with no indication anything more
+        should happen, so a successful run silently looked incomplete. False only when a
+        publish that was actually attempted (auto-publish-after-build, or the Publish button
+        itself) failed -- same as Android's own publishFailed branch -- so the failure's own log
+        line/error stays visible instead of being hidden behind the logbook immediately after.
+        """
+
         def show():
             if result.get("ok"):
                 self.log("[ok] " + t("log_logbook_ready", count=result.get("trip_count")))
+                if show_logbook_on_success:
+                    self.showing_local_logbook = True
+                    self._show_logbook_content()
             elif result.get("cancelled"):
                 self.log("[info] " + t("log_cancelled"))
             else:
