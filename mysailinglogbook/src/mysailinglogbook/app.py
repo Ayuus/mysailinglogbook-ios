@@ -328,7 +328,22 @@ class MySailingLogbook(toga.App):
         """
         store = self.settings_store
         if not store.is_w2k2_config_complete:
-            self.log("[info] " + t("log_fill_w2k2_credentials"))
+            # No "vul W2K2-gegevens in" line here anymore (asked for explicitly, matching
+            # MainActivity.kt's own autoStartSyncWithSettingsRetry() -- see its own comment for
+            # the full reasoning) -- W2K-2 settings being empty is no longer necessarily a problem
+            # worth greeting the owner with on every single launch, since on_import()'s own
+            # SD/USB-based import reaches the exact same decode/build/publish pipeline without the
+            # W2K-2 involved at all. on_download() itself still shows this exact message the
+            # moment the owner actually taps the download button -- see its own check -- which is
+            # the only point this was ever actually actionable information for them.
+            #
+            # Still shows whatever's already on the phone, though (found in practice, asked for
+            # explicitly, "als er html is, die tonen toch?") -- same fallback the hotspot-not-found
+            # branch just below already has, and the same gap Android's own equivalent fix had
+            # until caught the same way: removing the log line alone left this branch falling
+            # through to a blank screen instead.
+            if self.output_html_path().exists():
+                self.on_view(None)
             return
         subnet_prefix = detect_subnet_prefix()
         if subnet_prefix is None:
