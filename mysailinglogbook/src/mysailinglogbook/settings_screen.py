@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import toga
 from rubicon.objc import Block, ObjCClass, UIEdgeInsetsMake, objc_id
-from toga.dialogs import ConfirmDialog, ErrorDialog, InfoDialog
+from toga.dialogs import ConfirmDialog, InfoDialog
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
 from .settings_store import DEFAULT_MIN_STOP_MINUTES, DEFAULT_SFTP_PORT
@@ -453,12 +453,14 @@ class SettingsScreen:
         self.app.show_main_screen()
 
     async def _on_save(self, widget):
-        if not self.user_field.value.strip() or not self.password_field.value.strip():
-            await self.app.main_window.dialog(
-                ErrorDialog(t("label_w2k2_user"), t("toast_username_password_required"))
-            )
-            return
-
+        # No longer required to be filled in before saving (asked for explicitly, found in
+        # practice: this predates on_import()'s SD/USB-based import, which reaches the exact same
+        # decode/build/publish pipeline without the W2K-2 involved at all -- someone who only ever
+        # imports from a card has no reason to have W2K-2 credentials at all, and blocking Save
+        # entirely until they typed something in one made every other setting on this screen
+        # unreachable too, not just the download feature). Matches SettingsActivity.kt's own
+        # behavior, which has never validated these fields -- it just saves whatever's there,
+        # trimmed, same as every other field on this screen.
         fields = {
             "w2k2_user": self.user_field.value.strip(),
             "w2k2_password": self.password_field.value,

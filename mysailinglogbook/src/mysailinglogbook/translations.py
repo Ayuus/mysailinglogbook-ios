@@ -403,12 +403,6 @@ _STRINGS = {
         "fr": "Annuler",
         "de": "Abbrechen",
     },
-    "toast_username_password_required": {
-        "en": "Fill in the W2K-2 username and password.",
-        "nl": "Vul de W2K-2 gebruikersnaam en het wachtwoord in.",
-        "fr": "Renseignez le nom d'utilisateur et le mot de passe W2K-2.",
-        "de": "Geben Sie den W2K-2-Benutzernamen und das Passwort ein.",
-    },
     "dialog_clear_data_cache_message": {
         "en": "Deletes the decode/trip cache. The next download or assembly will re-decode every "
         ".ebl file from scratch (slower, no data lost).",
