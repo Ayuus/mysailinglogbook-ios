@@ -731,21 +731,38 @@ class MySailingLogbook(toga.App):
             )
             staging_dir = Path(tempfile.mkdtemp(prefix="ebl-import-"))
 
-            # One line per file, what actually happened to it (asked for explicitly, "ook melden
-            # wat je ermee hebt gedaan"), reported live as each file actually lands -- the same
-            # "Python calls back during its own real work, one file at a time" shape
+            # One line per newly-imported file, reported live as each one actually lands -- the
+            # same "Python calls back during its own real work, one file at a time" shape
             # ProgressCallback.report() already uses for a download (see import_ebl.py's own
             # ImportProgressCallback doc comment: root-caused, not logged from a loop over
             # result["files"] after import_staged_ebl_files() has already finished all the real
             # work, which found in practice -- Android hit the exact same thing first -- has
             # nothing left to pace it and reads as the log doing nothing until the entire batch
             # lands at once).
+            #
+            # "skipped_duplicate" deliberately does NOT get its own live line here (asked for
+            # explicitly, "zoveel mogelijk identiek aan android" -- this used to log both, matching
+            # MainActivity.kt's own progressCallback.report() before its "gelijk maken" fix).
+            # Matches w2k2_download.py's own "[skip] ... already complete locally" being logged at
+            # level="debug" rather than the default "info": a reformatted or previously-imported SD
+            # card/folder can just as easily be mostly duplicates, and a line per one would flood
+            # the log for zero new information the same way it would for a download. Still counted
+            # in the "skipped" summary line below (result["skipped_duplicate"]) -- only the one
+            # line per duplicate file is gone, not the information that it happened.
             def report_progress(current: int, total: int, name: str, outcome: str) -> None:
-                key = "log_import_copied" if outcome == "imported" else "log_import_already_present"
-                self.loop.call_soon_threadsafe(self.log, "[info] " + t(key, name=name))
+                if outcome == "imported":
+                    self.loop.call_soon_threadsafe(self.log, "[info] " + t("log_import_copied", name=name))
 
             try:
                 staged = self._stage_for_import(source_files, staging_dir)
+                # Same one-time phase-transition line as log_import_found above, between copying
+                # and importing (asked for explicitly, matching MainActivity.kt's own
+                # log_import_importing_started -- see its own comment there for why this matters:
+                # without it, the log stays on "...copying..." for the entire copying phase, which
+                # has no per-file line of its own either, same reasoning as above).
+                self.loop.call_soon_threadsafe(
+                    self.log, "[info] " + t("log_import_importing_started", count=len(staged))
+                )
                 result = import_ebl.import_staged_ebl_files(
                     [str(p) for p in staged], str(self.ebl_dir()), report_progress
                 )

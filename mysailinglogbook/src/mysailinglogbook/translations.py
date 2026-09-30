@@ -521,19 +521,25 @@ _STRINGS = {
         "fr": "Aucun fichier .ebl trouvé.",
         "de": "Keine .ebl-Dateien gefunden.",
     },
+    "log_import_importing_started": {
+        # {count} substituted at call time. Matches MainActivity.kt's own
+        # log_import_importing_started -- same one-time phase-transition line between copying and
+        # importing, added there for the same reason (asked for explicitly, "zoveel mogelijk
+        # identiek aan android"): without it, the log stayed on log_import_found's own "...
+        # copying..." line for the whole copying phase, reading as stuck even though copying
+        # itself was progressing (each file just isn't logged individually -- see report_progress
+        # below).
+        "en": "Copying done -- importing {count} file(s)...",
+        "nl": "Kopiëren klaar -- {count} bestand(en) importeren...",
+        "fr": "Copie terminée -- importation de {count} fichier(s)...",
+        "de": "Kopieren abgeschlossen -- {count} Datei(en) werden importiert...",
+    },
     "log_import_copied": {
         # {name} substituted at call time.
         "en": "Copied: {name}",
         "nl": "Gekopieerd: {name}",
         "fr": "Copié : {name}",
         "de": "Kopiert: {name}",
-    },
-    "log_import_already_present": {
-        # {name} substituted at call time.
-        "en": "Already present, skipped: {name}",
-        "nl": "Al aanwezig, overgeslagen: {name}",
-        "fr": "Déjà présent, ignoré : {name}",
-        "de": "Bereits vorhanden, übersprungen: {name}",
     },
     "log_import_done": {
         # {imported}/{skipped} substituted at call time.
