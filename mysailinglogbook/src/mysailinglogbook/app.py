@@ -349,7 +349,7 @@ class MySailingLogbook(toga.App):
             self.log("[info] " + t("log_hotspot_precheck_skipped"))
             return
         self.log("[info] " + t("log_checking_for_w2k2", subnet=subnet_prefix))
-        self._start_background(self._run_sync, subnet_prefix, busy_button=self.download_button)
+        self._start_background(self._run_download, subnet_prefix, busy_button=self.download_button)
 
     def apply_theme_mode(self) -> None:
         """Applies settings_store.theme_mode to the app's own UI (main_window and everything in
@@ -454,7 +454,7 @@ class MySailingLogbook(toga.App):
             self.log("[info] " + t("log_no_hotspot"))
             return
         self.log("[info] " + t("log_checking_for_w2k2", subnet=subnet_prefix))
-        self._start_background(self._run_sync, subnet_prefix, busy_button=self.download_button)
+        self._start_background(self._run_download, subnet_prefix, busy_button=self.download_button)
 
     def on_import(self, widget):
         if self.boot_mode_controller.busy:
@@ -867,7 +867,7 @@ class MySailingLogbook(toga.App):
 
     # Runs on the background thread started by _start_background() -- see the comment above
     # _run_build_from_local_files().
-    def _run_sync(self, subnet_prefix: str) -> None:
+    def _run_download(self, subnet_prefix: str) -> None:
         callback = ProgressCallback(self, self.cancel_event)
         result = android_entry.sync_from_w2k2(
             self.settings_store.w2k2_user,
