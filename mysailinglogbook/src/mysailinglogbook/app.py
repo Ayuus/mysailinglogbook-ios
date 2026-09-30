@@ -328,31 +328,27 @@ class MySailingLogbook(toga.App):
         """
         store = self.settings_store
         if not store.is_w2k2_config_complete:
-            # No "vul W2K2-gegevens in" line here anymore (asked for explicitly, matching
-            # MainActivity.kt's own autoStartSyncWithSettingsRetry() -- see its own comment for
-            # the full reasoning) -- W2K-2 settings being empty is no longer necessarily a problem
-            # worth greeting the owner with on every single launch, since on_import()'s own
-            # SD/USB-based import reaches the exact same decode/build/publish pipeline without the
-            # W2K-2 involved at all. on_download() itself still shows this exact message the
-            # moment the owner actually taps the download button -- see its own check -- which is
-            # the only point this was ever actually actionable information for them.
-            #
-            # Still shows whatever's already on the phone, though (found in practice, asked for
-            # explicitly, "als er html is, die tonen toch?") -- same fallback the hotspot-not-found
-            # branch just below already has, and the same gap Android's own equivalent fix had
-            # until caught the same way: removing the log line alone left this branch falling
-            # through to a blank screen instead.
-            if self.output_html_path().exists():
-                self.on_view(None)
+            # The "vul W2K2-gegevens in" line belongs here after all (reinstated -- found in
+            # practice, matching MainActivity.kt's own reversal, same reasoning): this whole
+            # method is only ever called when store.auto_sync_on_launch is already on (see
+            # startup()'s own branching, above) -- someone who only ever imports from SD/USB and
+            # never touches W2K-2 credentials would have no reason to turn that setting on in the
+            # first place, so they'd never reach this branch either way, message or not. The only
+            # person this line can ever reach already opted into auto-download and deserves to
+            # know why it isn't happening -- not a nag, a status report on a feature they asked
+            # for. No existing-logbook fallback here (asked for explicitly, "logboek alleen tonen
+            # als auto download uit staat") -- that fallback belongs solely to startup()'s own
+            # else branch (self.on_view(None), unconditional) for when auto-download is off; with
+            # it on, the owner asked to see fresh data, not whatever's cached.
+            self.log("[info] " + t("log_fill_w2k2_credentials"))
             return
         subnet_prefix = detect_subnet_prefix()
         if subnet_prefix is None:
             # Same calm, no-popup treatment as MainActivity.kt's own equivalent branch (a real
             # Android notification there too, which this app has no equivalent mechanism for at
             # all -- boat mode's own status lines are all just in-app log() calls, nothing this
-            # reuses for a background system notification).
-            if self.output_html_path().exists():
-                self.on_view(None)
+            # reuses for a background system notification). No existing-logbook fallback here
+            # either, same reasoning as the branch above.
             self.log("[info] " + t("log_hotspot_precheck_skipped"))
             return
         self.log("[info] " + t("log_checking_for_w2k2", subnet=subnet_prefix))
