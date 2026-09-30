@@ -425,17 +425,32 @@ class MySailingLogbook(toga.App):
         return self.paths.data / "sample_cache.pkl"
 
     def on_download(self, widget):
+        # Every early return below switches away from a currently-shown logbook first, same as
+        # _start_background()'s own matching reset for the success path just below (asked for
+        # explicitly, matching MainActivity.kt's own runSync()/runPublish() fix, "check ook bij
+        # andere knoppen of dit goed gaat in alle gevallen"): self.log() always appends to the log
+        # view's own text regardless of whether it's actually the visible layout right now, so
+        # without this each message was added but invisible behind a still-showing logbook,
+        # reading as if the button had done nothing at all.
         if self.boot_mode_controller.busy:
+            self.showing_local_logbook = False
+            self._show_log_content()
             self.log("[info] " + t("log_boat_busy"))
             return
         if self.sync_in_progress:
+            self.showing_local_logbook = False
+            self._show_log_content()
             self.log("[info] " + t("log_sync_already_running"))
             return
         if not self.settings_store.is_w2k2_config_complete:
+            self.showing_local_logbook = False
+            self._show_log_content()
             self.log("[info] " + t("log_fill_w2k2_credentials"))
             return
         subnet_prefix = detect_subnet_prefix()
         if subnet_prefix is None:
+            self.showing_local_logbook = False
+            self._show_log_content()
             self.log("[info] " + t("log_no_hotspot"))
             return
         self.log("[info] " + t("log_checking_for_w2k2", subnet=subnet_prefix))
@@ -443,9 +458,13 @@ class MySailingLogbook(toga.App):
 
     def on_import(self, widget):
         if self.boot_mode_controller.busy:
+            self.showing_local_logbook = False
+            self._show_log_content()
             self.log("[info] " + t("log_boat_busy"))
             return
         if self.sync_in_progress:
+            self.showing_local_logbook = False
+            self._show_log_content()
             self.log("[info] " + t("log_import_already_running"))
             return
         # Switches away from a currently-shown logbook right away, on the tap itself (asked for
@@ -474,9 +493,13 @@ class MySailingLogbook(toga.App):
 
     def on_build(self, widget):
         if self.boot_mode_controller.busy:
+            self.showing_local_logbook = False
+            self._show_log_content()
             self.log("[info] " + t("log_boat_busy"))
             return
         if self.sync_in_progress:
+            self.showing_local_logbook = False
+            self._show_log_content()
             self.log("[info] " + t("log_build_already_running"))
             return
         self.log("[info] " + t("log_building_from_local_files"))
@@ -488,13 +511,19 @@ class MySailingLogbook(toga.App):
         # to already be on disk"), then always publishes regardless of auto_publish_after_build --
         # an explicit tap of this button is itself the "yes, publish" instruction.
         if self.boot_mode_controller.busy:
+            self.showing_local_logbook = False
+            self._show_log_content()
             self.log("[info] " + t("log_boat_busy"))
             return
         if self.sync_in_progress:
+            self.showing_local_logbook = False
+            self._show_log_content()
             self.log("[info] " + t("log_publish_already_running"))
             return
         store = self.settings_store
         if not store.is_rest_upload_config_complete and not store.is_sftp_config_complete:
+            self.showing_local_logbook = False
+            self._show_log_content()
             self.log("[info] " + t("log_fill_publish_settings"))
             return
         self.log("[info] " + t("log_building_from_local_files"))
