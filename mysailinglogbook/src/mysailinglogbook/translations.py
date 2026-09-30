@@ -496,6 +496,86 @@ _STRINGS = {
         "fr": "Assemblage du carnet avec les données existantes...",
         "de": "Logbuch mit vorhandenen Daten zusammenstellen...",
     },
+    "log_import_already_running": {
+        "en": "An import is already running.",
+        "nl": "Er loopt al een import.",
+        "fr": "Une importation est déjà en cours.",
+        "de": "Es läuft bereits ein Import.",
+    },
+    "status_importing": {
+        "en": "Importing .ebl files...",
+        "nl": ".ebl-bestanden importeren...",
+        "fr": "Importation des fichiers .ebl...",
+        "de": ".ebl-Dateien werden importiert...",
+    },
+    "log_import_found": {
+        # {count} substituted at call time.
+        "en": "Found {count} .ebl file(s), copying...",
+        "nl": "{count} .ebl-bestand(en) gevonden, kopiëren...",
+        "fr": "{count} fichier(s) .ebl trouvé(s), copie en cours...",
+        "de": "{count} .ebl-Datei(en) gefunden, wird kopiert...",
+    },
+    "log_import_no_files": {
+        "en": "No .ebl files found there.",
+        "nl": "Geen .ebl-bestanden gevonden.",
+        "fr": "Aucun fichier .ebl trouvé.",
+        "de": "Keine .ebl-Dateien gefunden.",
+    },
+    "log_import_copied": {
+        # {name} substituted at call time.
+        "en": "Copied: {name}",
+        "nl": "Gekopieerd: {name}",
+        "fr": "Copié : {name}",
+        "de": "Kopiert: {name}",
+    },
+    "log_import_already_present": {
+        # {name} substituted at call time.
+        "en": "Already present, skipped: {name}",
+        "nl": "Al aanwezig, overgeslagen: {name}",
+        "fr": "Déjà présent, ignoré : {name}",
+        "de": "Bereits vorhanden, übersprungen: {name}",
+    },
+    "log_import_done": {
+        # {imported}/{skipped} substituted at call time.
+        "en": "Imported {imported} .ebl file(s) ({skipped} already present, skipped).",
+        "nl": "{imported} .ebl-bestand(en) geïmporteerd ({skipped} al aanwezig, overgeslagen).",
+        "fr": "{imported} fichier(s) .ebl importé(s) ({skipped} déjà présent(s), ignoré(s)).",
+        "de": "{imported} .ebl-Datei(en) importiert ({skipped} bereits vorhanden, übersprungen).",
+    },
+    "log_import_all_duplicates": {
+        # {count} substituted at call time.
+        "en": "Nothing new -- all {count} .ebl file(s) found were already present.",
+        "nl": "Niets nieuws -- alle {count} gevonden .ebl-bestand(en) waren al aanwezig.",
+        "fr": "Rien de nouveau -- les {count} fichier(s) .ebl trouvé(s) étaient déjà présents.",
+        "de": "Nichts Neues -- alle {count} gefundenen .ebl-Datei(en) waren bereits vorhanden.",
+    },
+    "log_import_renamed": {
+        # {detail} substituted at call time.
+        "en": "Same name, different content -- kept both: {detail}",
+        "nl": "Zelfde naam, andere inhoud -- allebei bewaard: {detail}",
+        "fr": "Même nom, contenu différent -- les deux ont été conservés : {detail}",
+        "de": "Gleicher Name, anderer Inhalt -- beide behalten: {detail}",
+    },
+    "log_import_file_error": {
+        # {detail} substituted at call time.
+        "en": "Problem importing a file: {detail}",
+        "nl": "Probleem bij importeren van een bestand: {detail}",
+        "fr": "Problème lors de l'importation d'un fichier : {detail}",
+        "de": "Problem beim Importieren einer Datei: {detail}",
+    },
+    "log_import_media_disconnected": {
+        "en": "Connection to the picked folder was lost -- pick it again and try again.",
+        "nl": "Verbinding met de gekozen map verloren -- kies 'm opnieuw en probeer nogmaals.",
+        "fr": "Connexion au dossier choisi perdue -- sélectionnez-le à nouveau et réessayez.",
+        "de": "Verbindung zum ausgewählten Ordner verloren -- erneut auswählen und noch einmal versuchen.",
+    },
+    "error_unexpected": {
+        # {detail} substituted at call time.
+        "en": "Unexpected error: {detail}",
+        "nl": "Onverwachte fout: {detail}",
+        "fr": "Erreur inattendue : {detail}",
+        "de": "Unerwarteter Fehler: {detail}",
+    },
     "log_publish_already_running": {
         "en": "A publish is already running.",
         "nl": "Er loopt al een publicatie.",

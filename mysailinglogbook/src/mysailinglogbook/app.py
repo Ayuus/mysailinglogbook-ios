@@ -6,14 +6,16 @@ status area, logbook view) are the same; see the Android app's MainActivity.kt f
 reference behavior each of these will eventually need to match.
 """
 
+import shutil
+import tempfile
 import threading
 from pathlib import Path
 
 import toga
-from rubicon.objc import Block, ObjCClass
+from rubicon.objc import Block, NSObject, ObjCClass, ObjCInstance, ObjCProtocol, objc_method
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
-from nmea2log import android_entry
+from nmea2log import android_entry, import_ebl
 from nmea2log.upload import UploadError, normalize_rest_upload_url, upload_via_rest
 
 from .boot_mode_controller import BootModeController
@@ -35,6 +37,33 @@ _UI_VIEW_ANIMATION_OPTION_REPEAT = 1 << 3
 _UI_VIEW_ANIMATION_OPTION_AUTOREVERSE = 1 << 4
 # UIImageRenderingMode.alwaysTemplate -- same reasoning as the animation options above.
 _UI_IMAGE_RENDERING_MODE_ALWAYS_TEMPLATE = 2
+
+_UIDocumentPickerViewController = ObjCClass("UIDocumentPickerViewController")
+_UTType = ObjCClass("UTType")
+_UIDocumentPickerDelegate = ObjCProtocol("UIDocumentPickerDelegate")
+
+
+class _ImportDocumentPickerDelegate(NSObject, protocols=[_UIDocumentPickerDelegate]):
+    """UIDocumentPickerViewController's own delegate, defined here via rubicon-objc's custom-
+    Objective-C-class support -- Toga has no folder picker on iOS of its own (toga_iOS.dialogs'
+    SelectFolderDialog/OpenFileDialog are both not_implemented() stubs, checked directly), so this
+    talks to UIKit the same way idle-timer/UIFileSharingEnabled already do elsewhere in this file:
+    directly, not a workaround.
+
+    app_ref is set by on_import() right after alloc().init(), the only place to stash a reference
+    back to the running MySailingLogbook instance -- an instance of this class is otherwise
+    indistinguishable from any other bare NSObject to Python. Held as self._import_picker_delegate
+    on the app too, for the same reason UIKit delegates are conventionally kept alive by their
+    owner: UIDocumentPickerViewController's own delegate property does not retain it."""
+
+    @objc_method
+    def documentPicker_didPickDocumentsAtURLs_(self, controller, urls) -> None:
+        url = ObjCInstance(urls).objectAtIndex(0)
+        self.app_ref.on_folder_picked(url)
+
+    @objc_method
+    def documentPickerWasCancelled_(self, controller) -> None:
+        pass
 
 
 def _template_tint_icon(button) -> None:
@@ -172,6 +201,14 @@ class MySailingLogbook(toga.App):
         # pushing only Settings to the far right instead of stretching every icon's own slot to
         # fill the toolbar width.
         self.download_button = toga.Button(icon=toga.Icon("resources/download"), on_press=self.on_download)
+        # A second way to get .ebl files onto the device besides download_button's own W2K-2
+        # download (matching Android's own importButton, see MainActivity.kt): picks a folder via
+        # UIDocumentPickerViewController (see _ImportDocumentPickerDelegate above), copies whatever
+        # .ebl files it finds anywhere in there into this app's own ebl_dir(), then builds/
+        # publishes exactly like a normal download would. Placed right next to download_button
+        # (asked for explicitly, same reasoning as Android's own placement): this is a download
+        # too in the end, just from a folder instead of the W2K-2.
+        self.import_button = toga.Button(icon=toga.Icon("resources/folder_download"), on_press=self.on_import)
         self.build_button = toga.Button(icon=toga.Icon("resources/refresh"), on_press=self.on_build)
         self.publish_button = toga.Button(icon=toga.Icon("resources/upload"), on_press=self.on_publish)
         self.view_button = toga.Button(icon=toga.Icon("resources/article"), on_press=self.on_view)
@@ -179,6 +216,7 @@ class MySailingLogbook(toga.App):
         self.settings_button = toga.Button(icon=toga.Icon("resources/settings"), on_press=self.on_settings)
         for button in (
             self.download_button,
+            self.import_button,
             self.build_button,
             self.publish_button,
             self.view_button,
@@ -191,6 +229,7 @@ class MySailingLogbook(toga.App):
         toolbar = toga.Box(
             children=[
                 self.download_button,
+                self.import_button,
                 self.build_button,
                 self.publish_button,
                 self.view_button,
@@ -393,6 +432,37 @@ class MySailingLogbook(toga.App):
             return
         self.log("[info] " + t("log_checking_for_w2k2", subnet=subnet_prefix))
         self._start_background(self._run_sync, subnet_prefix, busy_button=self.download_button)
+
+    def on_import(self, widget):
+        if self.boot_mode_controller.busy:
+            self.log("[info] " + t("log_boat_busy"))
+            return
+        if self.sync_in_progress:
+            self.log("[info] " + t("log_import_already_running"))
+            return
+        # Switches away from a currently-shown logbook right away, on the tap itself (asked for
+        # explicitly, matching MainActivity.kt's own importButton onClick -- see its own comment):
+        # the picker sheet can sit there a while before the owner actually picks anything, and the
+        # log is where every outcome below shows up, including "picked nothing" (cancelled).
+        self.showing_local_logbook = False
+        self._show_log_content()
+        folder_type = _UTType.typeWithIdentifier("public.folder")
+        picker = _UIDocumentPickerViewController.alloc().initForOpeningContentTypes([folder_type])
+        # Held on self, not just a local -- UIDocumentPickerViewController's own delegate property
+        # does not retain it (see _ImportDocumentPickerDelegate's own doc comment); without this,
+        # nothing else keeps the delegate alive until the picker actually calls back.
+        self._import_picker_delegate = _ImportDocumentPickerDelegate.alloc().init()
+        self._import_picker_delegate.app_ref = self
+        picker.delegate = self._import_picker_delegate
+        toga.App.app.current_window._impl.native.rootViewController.presentViewController(
+            picker, animated=True, completion=None
+        )
+
+    def on_folder_picked(self, url) -> None:
+        """_ImportDocumentPickerDelegate's own callback once a folder is picked -- always runs on
+        the main thread (UIKit delegate callbacks do), so _start_background() itself is safe to
+        call directly from here, same as any toolbar button's on_press."""
+        self._start_background(self._run_import, url, busy_button=self.import_button)
 
     def on_build(self, widget):
         if self.boot_mode_controller.busy:
@@ -609,6 +679,7 @@ class MySailingLogbook(toga.App):
         # staying enabled.
         for button in (
             self.download_button,
+            self.import_button,
             self.build_button,
             self.publish_button,
             self.boat_mode_button,
@@ -616,6 +687,102 @@ class MySailingLogbook(toga.App):
             if button is self._busy_button:
                 continue
             button.enabled = enabled
+
+    def _stage_for_import(self, source_files: list[Path], staging_dir: Path) -> list[Path]:
+        """Copies every found .ebl file into a local scratch directory, preserving each source
+        file's own immediate parent folder name when it looks like one of the W2K-2's own
+        "EBLnnnnnn" folders (see nmea2log.import_ebl's own module doc comment for why that
+        identity matters) -- mirrors MainActivity.kt's own stageForImport() exactly, minus the
+        SAF-specific plumbing that exists there only because a content:// Uri isn't a real path;
+        here, once startAccessingSecurityScopedResource() has succeeded, url.path already is one,
+        so this is a plain local-to-local copy. A same-named loose (non-EBLnnnnnn) file colliding
+        with an earlier one in this same batch gets a "-1"/"-2" suffix here, purely to survive the
+        copy itself -- same reasoning as the Android side."""
+        staged = []
+        for source in source_files:
+            parent_name = source.parent.name
+            if import_ebl.EBL_FOLDER_NAME.match(parent_name) and import_ebl.EBL_FILE_NAME.match(source.name):
+                dest_dir = staging_dir / parent_name
+            else:
+                dest_dir = staging_dir
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / source.name
+            suffix = 1
+            while dest.exists():
+                dest = dest_dir / f"{source.stem}-{suffix}{source.suffix}"
+                suffix += 1
+            shutil.copy2(source, dest)
+            staged.append(dest)
+        return staged
+
+    # Runs on the background thread started by _start_background() -- see the comment above
+    # _run_build_from_local_files(). Reached from on_folder_picked() via _start_background().
+    def _run_import(self, url) -> None:
+        granted = False
+        try:
+            granted = bool(url.startAccessingSecurityScopedResource())
+            source_root = Path(str(url.path))
+            source_files = sorted(source_root.rglob("*.ebl"))
+            if not source_files:
+                self.loop.call_soon_threadsafe(self.log, "[info] " + t("log_import_no_files"))
+                return
+            self.loop.call_soon_threadsafe(
+                self.log, "[info] " + t("log_import_found", count=len(source_files))
+            )
+            staging_dir = Path(tempfile.mkdtemp(prefix="ebl-import-"))
+
+            # One line per file, what actually happened to it (asked for explicitly, "ook melden
+            # wat je ermee hebt gedaan"), reported live as each file actually lands -- the same
+            # "Python calls back during its own real work, one file at a time" shape
+            # ProgressCallback.report() already uses for a download (see import_ebl.py's own
+            # ImportProgressCallback doc comment: root-caused, not logged from a loop over
+            # result["files"] after import_staged_ebl_files() has already finished all the real
+            # work, which found in practice -- Android hit the exact same thing first -- has
+            # nothing left to pace it and reads as the log doing nothing until the entire batch
+            # lands at once).
+            def report_progress(current: int, total: int, name: str, outcome: str) -> None:
+                key = "log_import_copied" if outcome == "imported" else "log_import_already_present"
+                self.loop.call_soon_threadsafe(self.log, "[info] " + t(key, name=name))
+
+            try:
+                staged = self._stage_for_import(source_files, staging_dir)
+                result = import_ebl.import_staged_ebl_files(
+                    [str(p) for p in staged], str(self.ebl_dir()), report_progress
+                )
+            finally:
+                shutil.rmtree(staging_dir, ignore_errors=True)
+            # A same name that turned out to hold different content (a reformatted SD card
+            # reusing an EBLnnnnnn folder, or two unrelated loose files sharing a name) -- see
+            # import_ebl.py's own doc comment. Nothing was lost (both are kept, under different
+            # names), but it's worth flagging more than a plain import, hence [warning] rather
+            # than [info] (asked for explicitly).
+            for detail in result["renamed"]:
+                self.loop.call_soon_threadsafe(self.log, "[warning] " + t("log_import_renamed", detail=detail))
+            for detail in result["errors"]:
+                self.loop.call_soon_threadsafe(self.log, "[warning] " + t("log_import_file_error", detail=detail))
+            imported = result["imported"]
+            skipped = result["skipped_duplicate"]
+            if imported > 0:
+                self.loop.call_soon_threadsafe(self.log, t("log_import_done", imported=imported, skipped=skipped))
+            elif skipped > 0:
+                self.loop.call_soon_threadsafe(
+                    self.log, "[info] " + t("log_import_all_duplicates", count=skipped)
+                )
+            else:
+                self.loop.call_soon_threadsafe(self.log, "[info] " + t("log_import_no_files"))
+            if imported > 0:
+                self._run_build_from_local_files()
+        except OSError:
+            # The picked folder's own connection was lost mid-import (asked for explicitly,
+            # matching MainActivity.kt's own FileNotFoundException/SecurityException handling) --
+            # a removable drive disconnected, or an iCloud Drive item that never finished
+            # downloading. Reads as the mundane, expected thing it is, not an app bug.
+            self.loop.call_soon_threadsafe(self.log, "[error] " + t("log_import_media_disconnected"))
+        except Exception as e:
+            self.loop.call_soon_threadsafe(self.log, "[error] " + t("error_unexpected", detail=str(e)))
+        finally:
+            if granted:
+                url.stopAccessingSecurityScopedResource()
 
     # Runs on the background thread started by _start_background() -- must not touch the UI
     # directly (see ProgressCallback's own doc comment and _log_result() below).
