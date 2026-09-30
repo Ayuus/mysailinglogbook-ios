@@ -6,6 +6,7 @@ status area, logbook view) are the same; see the Android app's MainActivity.kt f
 reference behavior each of these will eventually need to match.
 """
 
+import re
 import shutil
 import tempfile
 import threading
@@ -41,6 +42,18 @@ _UI_IMAGE_RENDERING_MODE_ALWAYS_TEMPLATE = 2
 _UIDocumentPickerViewController = ObjCClass("UIDocumentPickerViewController")
 _UTType = ObjCClass("UTType")
 _UIDocumentPickerDelegate = ObjCProtocol("UIDocumentPickerDelegate")
+
+# Same two signals SyncProgress.kt's own decodeRegex/buildPhaseMarkers parse out of the shared
+# nmea2log log lines (decode and build-trips have no per-file callback of their own, unlike
+# download/copying/importing) -- ported here verbatim so MySailingLogbook.update_progress_bar()
+# gets the same phase/current/total for these two phases as Android does.
+_DECODE_PROGRESS_RE = re.compile(r"decoded (\d+)/(\d+) logfile\(s\) so far")
+_BUILD_PHASE_MARKERS = [
+    re.compile(r"Building trips from \d+ GPS position\(s\)"),
+    re.compile(r"\d+ navigation samples merged, classifying trips"),
+    re.compile(r"\d+ run\(s\) classified, computing per-trip statistics"),
+    re.compile(r"\d+ trip\(s\) found, writing logbook"),
+]
 
 
 class _ImportDocumentPickerDelegate(NSObject, protocols=[_UIDocumentPickerDelegate]):
@@ -160,12 +173,27 @@ class ProgressCallback:
         self.app.loop.call_soon_threadsafe(
             self.app.log, "[info] " + t("log_downloading", current=current, total=total, file_name=file_name)
         )
+        self.app.loop.call_soon_threadsafe(self.app.update_progress_bar, t("phase_downloading"), current, total)
 
     def isCancelled(self):
         return self.cancel_event.is_set()
 
     def onLogLine(self, line):
         self.app.loop.call_soon_threadsafe(self.app.log, line)
+        # Same two regex-parsed phases as MainActivity.kt's own handleLogLine() (see
+        # _DECODE_PROGRESS_RE/_BUILD_PHASE_MARKERS above): decode and build-trips have no
+        # per-file callback of their own, only these markers in the shared nmea2log log lines.
+        decode_match = _DECODE_PROGRESS_RE.search(line)
+        if decode_match:
+            current, total = int(decode_match.group(1)), int(decode_match.group(2))
+            self.app.loop.call_soon_threadsafe(self.app.update_progress_bar, t("phase_decoding"), current, total)
+            return
+        for step, marker in enumerate(_BUILD_PHASE_MARKERS):
+            if marker.search(line):
+                self.app.loop.call_soon_threadsafe(
+                    self.app.update_progress_bar, t("phase_building_trips"), step + 1, len(_BUILD_PHASE_MARKERS)
+                )
+                break
 
     def onDownloadComplete(self):
         pass
@@ -263,12 +291,33 @@ class MySailingLogbook(toga.App):
         # hidden-but-still-flex-1 other one was still being measured).
         self.content_area = toga.Box(children=[self.log_view, self.web_view], style=Pack(flex=1, direction=COLUMN))
 
-        # toolbar + content_area -- the "main" screen this swaps back to from Settings (there's
-        # no second toga.Window to switch to on iOS, see settings_screen.py's own doc comment on
-        # why Settings swaps the single MainWindow's content in place instead; unlike Settings,
-        # the View toggle only swaps content_area's own child, leaving the toolbar in place, to
-        # match Android's own layout -- see the comment above).
-        self.main_content = toga.Box(children=[toolbar, self.content_area], style=Pack(direction=COLUMN))
+        # Bottom progress bar + "phase: x/y" label -- mirrors MainActivity.kt's own progressBar/
+        # progressLabel exactly (same 5 phases, same wording, see update_progress_bar()'s own doc
+        # comment below), asked for explicitly ("zoveel mogelijk identiek aan android"). Hidden
+        # (style.visibility) rather than shown at 0/0 until the first real update_progress_bar()
+        # call, same as Android's own View.GONE default. progress_bar's own margin_bottom is set
+        # dynamically in update_progress_bar() -- toga_iOS's MainWindow (see window.py's own
+        # content_native_layout()) only ever insets its content from the *top* (status bar/
+        # navigation bar height); nothing insets it from the bottom, so a fixed guess here either
+        # clips under the home indicator (portrait) or leaves an oversized gap (landscape, where
+        # the same point value reads much bigger against a shorter screen) -- found in practice,
+        # both ways, testing this on the simulator.
+        self.progress_label = toga.Label(
+            "", style=Pack(margin=(4, 8, 0, 8), display="none", visibility="hidden", height=0)
+        )
+        self.progress_bar = toga.ProgressBar(
+            max=1, value=0, style=Pack(margin=(2, 8, 4, 8), display="none", visibility="hidden", height=0)
+        )
+
+        # toolbar + content_area + progress bar -- the "main" screen this swaps back to from
+        # Settings (there's no second toga.Window to switch to on iOS, see settings_screen.py's
+        # own doc comment on why Settings swaps the single MainWindow's content in place instead;
+        # unlike Settings, the View toggle only swaps content_area's own child, leaving the
+        # toolbar in place, to match Android's own layout -- see the comment above).
+        self.main_content = toga.Box(
+            children=[toolbar, self.content_area, self.progress_label, self.progress_bar],
+            style=Pack(direction=COLUMN),
+        )
 
         self.main_window = toga.MainWindow(title=self.formal_name)
         self.main_window.content = self.main_content
@@ -637,6 +686,60 @@ class MySailingLogbook(toga.App):
         self.web_view.style.visibility = "visible"
         self.web_view.style.flex = 1
 
+    def update_progress_bar(self, phase: str, current: int, total: int) -> None:
+        """Bottom progress bar + "phase: x/y" label -- mirrors MainActivity.kt's own
+        updateProgressBar() exactly (asked for explicitly, "zoveel mogelijk identiek aan
+        android"): fed from ProgressCallback.report() (download), _stage_for_import()'s own
+        per-file callback (copying), ProgressCallback.onLogLine()'s regex matches (decode,
+        build-trips), and the report_progress closure inside _run_import() (importing). Hidden
+        rather than shown at 0/0 for a total <= 0 (nothing meaningful to show yet), same as
+        Android's own View.GONE default.
+
+        Always called via self.loop.call_soon_threadsafe() by every one of those callers except
+        report_progress-during-copying which itself is only ever invoked on the main thread
+        (same reasoning as report() elsewhere in this file) -- never call this directly from a
+        background thread.
+        """
+        if total <= 0:
+            self.hide_progress_bar()
+            return
+        self.progress_label.style.display = "pack"
+        self.progress_label.style.visibility = "visible"
+        self.progress_label.style.height = NONE
+        self.progress_bar.style.display = "pack"
+        self.progress_bar.style.visibility = "visible"
+        self.progress_bar.style.height = NONE
+        # Re-read every call, not just once -- cheap, and the same rotation that changes the
+        # home indicator's on-screen footprint can happen at any point while a run is in progress.
+        self.progress_bar.style.margin_bottom = self._bottom_safe_area_margin()
+        self.progress_bar.max = total
+        self.progress_bar.value = current
+        self.progress_label.text = t("progress_label_format", phase=phase, current=current, total=total)
+
+    def _bottom_safe_area_margin(self) -> int:
+        """The real height of the home indicator's own gesture area (0 on an iPad or an older
+        Home-button iPhone) -- read live from the view hierarchy, plus a small fixed gutter, so
+        the bar clears it exactly regardless of device or orientation. toga_iOS's own MainWindow
+        (see window.py's content_native_layout()) only ever insets its content from the *top*
+        (status bar/navigation bar height); nothing insets the bottom, unlike MainActivity.kt's
+        own onApplyWindowInsetsListener, which pads all four sides from the real system-bar
+        insets -- this is that same idea, ported by hand since toga_iOS has no equivalent of its
+        own. Falls back to a plain fixed gutter if the native view isn't reachable for any reason
+        (matches _set_idle_timer_disabled()'s own defensive style above)."""
+        try:
+            inset = float(self.main_window._impl.container.native.safeAreaInsets.bottom)
+        except Exception:
+            inset = 0.0
+        return int(round(inset)) + 4
+
+    def hide_progress_bar(self) -> None:
+        self.progress_label.style.display = "none"
+        self.progress_label.style.visibility = "hidden"
+        self.progress_label.style.height = 0
+        self.progress_bar.style.display = "none"
+        self.progress_bar.style.visibility = "hidden"
+        self.progress_bar.style.height = 0
+
     def on_boat_mode(self, widget):
         if self.boot_mode_controller.active:
             self.boot_mode_controller.stop()
@@ -703,6 +806,7 @@ class MySailingLogbook(toga.App):
     def _on_run_finished(self) -> None:
         self.sync_in_progress = False
         self._set_toolbar_enabled(True)
+        self.hide_progress_bar()
         if self._busy_button is not None:
             _set_busy_pulse(self._busy_button, False)
             self._busy_button = None
@@ -725,7 +829,7 @@ class MySailingLogbook(toga.App):
                 continue
             button.enabled = enabled
 
-    def _stage_for_import(self, source_files: list[Path], staging_dir: Path) -> list[Path]:
+    def _stage_for_import(self, source_files: list[Path], staging_dir: Path, report_progress=None) -> list[Path]:
         """Copies every found .ebl file into a local scratch directory, preserving each source
         file's own immediate parent folder name when it looks like one of the W2K-2's own
         "EBLnnnnnn" folders (see nmea2log.import_ebl's own module doc comment for why that
@@ -734,9 +838,16 @@ class MySailingLogbook(toga.App):
         here, once startAccessingSecurityScopedResource() has succeeded, url.path already is one,
         so this is a plain local-to-local copy. A same-named loose (non-EBLnnnnnn) file colliding
         with an earlier one in this same batch gets a "-1"/"-2" suffix here, purely to survive the
-        copy itself -- same reasoning as the Android side."""
+        copy itself -- same reasoning as the Android side.
+
+        report_progress(current, total, file_name), when given, is called after each file is
+        copied -- the "Copying" phase of _run_import()'s own progress bar (see
+        MainActivity.kt's own stageForImport() lambda, updateProgressBar(phase_copying, ...)),
+        not "Importing": this is only the copy into local scratch space, the actual per-file
+        import decision happens in the separate phase after this one returns."""
         staged = []
-        for source in source_files:
+        total = len(source_files)
+        for current, source in enumerate(source_files, start=1):
             parent_name = source.parent.name
             if import_ebl.EBL_FOLDER_NAME.match(parent_name) and import_ebl.EBL_FILE_NAME.match(source.name):
                 dest_dir = staging_dir / parent_name
@@ -750,6 +861,8 @@ class MySailingLogbook(toga.App):
                 suffix += 1
             shutil.copy2(source, dest)
             staged.append(dest)
+            if report_progress is not None:
+                report_progress(current, total, source.name)
         return staged
 
     # Runs on the background thread started by _start_background() -- see the comment above
@@ -789,9 +902,16 @@ class MySailingLogbook(toga.App):
             def report_progress(current: int, total: int, name: str, outcome: str) -> None:
                 if outcome == "imported":
                     self.loop.call_soon_threadsafe(self.log, "[info] " + t("log_import_copied", name=name))
+                # The progress-bar update itself fires unconditionally, regardless of outcome --
+                # matches MainActivity.kt's own ImportProgressCallback.report() exactly, which
+                # calls updateProgressBar() outside its own "if (outcome == imported)" check.
+                self.loop.call_soon_threadsafe(self.update_progress_bar, t("phase_importing"), current, total)
+
+            def report_copy_progress(current: int, total: int, name: str) -> None:
+                self.loop.call_soon_threadsafe(self.update_progress_bar, t("phase_copying"), current, total)
 
             try:
-                staged = self._stage_for_import(source_files, staging_dir)
+                staged = self._stage_for_import(source_files, staging_dir, report_copy_progress)
                 # Same one-time phase-transition line as log_import_found above, between copying
                 # and importing (asked for explicitly, matching MainActivity.kt's own
                 # log_import_importing_started -- see its own comment there for why this matters:

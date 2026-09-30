@@ -652,6 +652,49 @@ _STRINGS = {
         "fr": "Annulé.",
         "de": "Abgebrochen.",
     },
+    # The five progress_bar/progress_label phases below and progress_label_format match
+    # MainActivity.kt's own phase_downloading/phase_decoding/phase_building_trips/phase_copying/
+    # phase_importing/progress_label_format exactly (same wording, all 4 languages) -- see
+    # MySailingLogbook.update_progress_bar()'s own doc comment.
+    "phase_downloading": {
+        "en": "Downloading",
+        "nl": "Downloaden",
+        "fr": "Téléchargement",
+        "de": "Herunterladen",
+    },
+    "phase_decoding": {
+        "en": "Decoding",
+        "nl": "Decoderen",
+        "fr": "Décodage",
+        "de": "Wird dekodiert",
+    },
+    "phase_building_trips": {
+        "en": "Assembling trips",
+        "nl": "Reizen samenstellen",
+        "fr": "Assemblage des trajets",
+        "de": "Fahrten werden zusammengestellt",
+    },
+    "phase_copying": {
+        "en": "Copying",
+        "nl": "Kopiëren",
+        "fr": "Copie",
+        "de": "Kopieren",
+    },
+    "phase_importing": {
+        "en": "Importing",
+        "nl": "Importeren",
+        "fr": "Importation",
+        "de": "Importieren",
+    },
+    "progress_label_format": {
+        # {phase}/{current}/{total} substituted at call time -- Android's own equivalent
+        # (progress_label_format, "%1$s: %2$d/%3$d") uses positional placeholders instead, the
+        # same difference log_downloading above already has from its own Android counterpart.
+        "en": "{phase}: {current}/{total}",
+        "nl": "{phase}: {current}/{total}",
+        "fr": "{phase} : {current}/{total}",
+        "de": "{phase}: {current}/{total}",
+    },
     "log_downloading": {
         # {current}/{total}/{file_name} substituted at call time.
         "en": "Downloading: {current}/{total} ({file_name})",
