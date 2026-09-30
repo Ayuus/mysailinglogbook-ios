@@ -627,10 +627,10 @@ _STRINGS = {
         "WordPress-Veröffentlichung in den Einstellungen.",
     },
     "log_no_logbook_to_view": {
-        "en": "No logbook to view yet -- download first.",
-        "nl": "Nog geen logboek om te bekijken -- download eerst.",
-        "fr": "Aucun carnet à afficher pour l'instant -- téléchargez d'abord.",
-        "de": "Noch kein Logbuch zum Anzeigen -- zuerst herunterladen.",
+        "en": "No logbook to view yet -- assemble one first.",
+        "nl": "Nog geen logboek om te bekijken -- stel er eerst een samen.",
+        "fr": "Aucun carnet à afficher pour l'instant -- assemblez-en un d'abord.",
+        "de": "Noch kein Logbuch zum Anzeigen -- zuerst eines zusammenstellen.",
     },
     "log_logbook_display_failed": {
         # {error} substituted at call time.
