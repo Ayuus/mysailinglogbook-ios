@@ -328,19 +328,16 @@ class MySailingLogbook(toga.App):
         """
         store = self.settings_store
         if not store.is_w2k2_config_complete:
-            # The "vul W2K2-gegevens in" line belongs here after all (reinstated -- found in
-            # practice, matching MainActivity.kt's own reversal, same reasoning): this whole
-            # method is only ever called when store.auto_sync_on_launch is already on (see
-            # startup()'s own branching, above) -- someone who only ever imports from SD/USB and
-            # never touches W2K-2 credentials would have no reason to turn that setting on in the
-            # first place, so they'd never reach this branch either way, message or not. The only
-            # person this line can ever reach already opted into auto-download and deserves to
-            # know why it isn't happening -- not a nag, a status report on a feature they asked
-            # for. No existing-logbook fallback here (asked for explicitly, "logboek alleen tonen
+            # Just calls on_download() rather than duplicating its own is_w2k2_config_complete
+            # check and log_fill_w2k2_credentials line here too (asked for explicitly, matching
+            # MainActivity.kt's own equivalent simplification: "1x is toch genoeg?") --
+            # on_download() already starts with the exact same check and produces the exact same
+            # message for a manual tap on the download button, so this is the single source of
+            # truth for what to show when settings are incomplete, reached either way. No
+            # existing-logbook fallback either way (asked for explicitly, "logboek alleen tonen
             # als auto download uit staat") -- that fallback belongs solely to startup()'s own
-            # else branch (self.on_view(None), unconditional) for when auto-download is off; with
-            # it on, the owner asked to see fresh data, not whatever's cached.
-            self.log("[info] " + t("log_fill_w2k2_credentials"))
+            # else branch (self.on_view(None), unconditional) for when auto-download is off.
+            self.on_download(None)
             return
         subnet_prefix = detect_subnet_prefix()
         if subnet_prefix is None:
