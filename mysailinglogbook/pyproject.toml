@@ -155,6 +155,13 @@ requires = [
 
 # Mobile deployments
 [tool.briefcase.app.mysailinglogbook.iOS]
+# Xcode 27's simulator/device toolchain refuses anything below 15.0 (found in
+# practice: Xcode 27 on a fresh Mac mini rejected the briefcase iOS template's own
+# default of 13.0 outright -- "supported deployment target versions is 15.0 to
+# 27.0.x"). Raise, not just silence the error: nothing in this app needs anything
+# between 13.0 and 15.0 anyway.
+min_os_version = "15.0"
+
 # Absolute path, machine-specific -- same reasoning as the Android app's own
 # local.properties (nmea2log.src.dir), just no equivalent git-ignored override file
 # here yet since there is only one machine this has ever been built on so far.
