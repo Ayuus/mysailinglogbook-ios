@@ -504,29 +504,16 @@ _STRINGS = {
     },
     "log_import_found": {
         # {count} substituted at call time.
-        "en": "Found {count} .ebl file(s), copying...",
-        "nl": "{count} .ebl-bestand(en) gevonden, kopiëren...",
-        "fr": "{count} fichier(s) .ebl trouvé(s), copie en cours...",
-        "de": "{count} .ebl-Datei(en) gefunden, wird kopiert...",
+        "en": "Found {count} .ebl file(s), importing...",
+        "nl": "{count} .ebl-bestand(en) gevonden, importeren...",
+        "fr": "{count} fichier(s) .ebl trouvé(s), importation en cours...",
+        "de": "{count} .ebl-Datei(en) gefunden, werden importiert...",
     },
     "log_import_no_files": {
         "en": "No .ebl files found there.",
         "nl": "Geen .ebl-bestanden gevonden.",
         "fr": "Aucun fichier .ebl trouvé.",
         "de": "Keine .ebl-Dateien gefunden.",
-    },
-    "log_import_importing_started": {
-        # {count} substituted at call time. Matches MainActivity.kt's own
-        # log_import_importing_started -- same one-time phase-transition line between copying and
-        # importing, added there for the same reason (asked for explicitly, "zoveel mogelijk
-        # identiek aan android"): without it, the log stayed on log_import_found's own "...
-        # copying..." line for the whole copying phase, reading as stuck even though copying
-        # itself was progressing (each file just isn't logged individually -- see report_progress
-        # below).
-        "en": "Copying done -- importing {count} file(s)...",
-        "nl": "Kopiëren klaar -- {count} bestand(en) importeren...",
-        "fr": "Copie terminée -- importation de {count} fichier(s)...",
-        "de": "Kopieren abgeschlossen -- {count} Datei(en) werden importiert...",
     },
     "log_import_copied": {
         # {name} substituted at call time.
@@ -652,8 +639,8 @@ _STRINGS = {
         "fr": "Annulé.",
         "de": "Abgebrochen.",
     },
-    # The five progress_bar/progress_label phases below and progress_label_format match
-    # MainActivity.kt's own phase_downloading/phase_decoding/phase_building_trips/phase_copying/
+    # The four progress_bar/progress_label phases below and progress_label_format match
+    # MainActivity.kt's own phase_downloading/phase_decoding/phase_building_trips/
     # phase_importing/progress_label_format exactly (same wording, all 4 languages) -- see
     # MySailingLogbook.update_progress_bar()'s own doc comment.
     "phase_downloading": {
@@ -673,12 +660,6 @@ _STRINGS = {
         "nl": "Reizen samenstellen",
         "fr": "Assemblage des trajets",
         "de": "Fahrten werden zusammengestellt",
-    },
-    "phase_copying": {
-        "en": "Copying",
-        "nl": "Kopiëren",
-        "fr": "Copie",
-        "de": "Kopieren",
     },
     "phase_importing": {
         "en": "Importing",

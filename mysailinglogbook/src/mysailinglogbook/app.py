@@ -7,8 +7,6 @@ reference behavior each of these will eventually need to match.
 """
 
 import re
-import shutil
-import tempfile
 import threading
 from pathlib import Path
 
@@ -723,9 +721,9 @@ class MySailingLogbook(toga.App):
     def update_progress_bar(self, phase: str, current: int, total: int) -> None:
         """Bottom progress bar + "phase: x/y" label -- mirrors MainActivity.kt's own
         updateProgressBar() exactly (asked for explicitly, "zoveel mogelijk identiek aan
-        android"): fed from ProgressCallback.report() (download), _stage_for_import()'s own
-        per-file callback (copying), ProgressCallback.onLogLine()'s regex matches (decode,
-        build-trips), and the report_progress closure inside _run_import() (importing). Hidden
+        android"): fed from ProgressCallback.report() (download), ProgressCallback.onLogLine()'s
+        regex matches (decode, build-trips), and the report_progress closure inside _run_import()
+        (importing). Hidden
         rather than shown at 0/0 for a total <= 0 (nothing meaningful to show yet), same as
         Android's own View.GONE default.
 
@@ -863,42 +861,6 @@ class MySailingLogbook(toga.App):
                 continue
             button.enabled = enabled
 
-    def _stage_for_import(self, source_files: list[Path], staging_dir: Path, report_progress=None) -> list[Path]:
-        """Copies every found .ebl file into a local scratch directory, preserving each source
-        file's own immediate parent folder name when it looks like one of the W2K-2's own
-        "EBLnnnnnn" folders (see nmea2log.import_ebl's own module doc comment for why that
-        identity matters) -- mirrors MainActivity.kt's own stageForImport() exactly, minus the
-        SAF-specific plumbing that exists there only because a content:// Uri isn't a real path;
-        here, once startAccessingSecurityScopedResource() has succeeded, url.path already is one,
-        so this is a plain local-to-local copy. A same-named loose (non-EBLnnnnnn) file colliding
-        with an earlier one in this same batch gets a "-1"/"-2" suffix here, purely to survive the
-        copy itself -- same reasoning as the Android side.
-
-        report_progress(current, total, file_name), when given, is called after each file is
-        copied -- the "Copying" phase of _run_import()'s own progress bar (see
-        MainActivity.kt's own stageForImport() lambda, updateProgressBar(phase_copying, ...)),
-        not "Importing": this is only the copy into local scratch space, the actual per-file
-        import decision happens in the separate phase after this one returns."""
-        staged = []
-        total = len(source_files)
-        for current, source in enumerate(source_files, start=1):
-            parent_name = source.parent.name
-            if import_ebl.EBL_FOLDER_NAME.match(parent_name) and import_ebl.EBL_FILE_NAME.match(source.name):
-                dest_dir = staging_dir / parent_name
-            else:
-                dest_dir = staging_dir
-            dest_dir.mkdir(parents=True, exist_ok=True)
-            dest = dest_dir / source.name
-            suffix = 1
-            while dest.exists():
-                dest = dest_dir / f"{source.stem}-{suffix}{source.suffix}"
-                suffix += 1
-            shutil.copy2(source, dest)
-            staged.append(dest)
-            if report_progress is not None:
-                report_progress(current, total, source.name)
-        return staged
-
     # Runs on the background thread started by _start_background() -- see the comment above
     # _run_build_from_local_files(). Reached from on_folder_picked() via _start_background().
     def _run_import(self, url) -> None:
@@ -913,7 +875,6 @@ class MySailingLogbook(toga.App):
             self.loop.call_soon_threadsafe(
                 self.log, "[info] " + t("log_import_found", count=len(source_files))
             )
-            staging_dir = Path(tempfile.mkdtemp(prefix="ebl-import-"))
 
             # One line per newly-imported file, reported live as each one actually lands -- the
             # same "Python calls back during its own real work, one file at a time" shape
@@ -941,24 +902,14 @@ class MySailingLogbook(toga.App):
                 # calls updateProgressBar() outside its own "if (outcome == imported)" check.
                 self.loop.call_soon_threadsafe(self.update_progress_bar, t("phase_importing"), current, total)
 
-            def report_copy_progress(current: int, total: int, name: str) -> None:
-                self.loop.call_soon_threadsafe(self.update_progress_bar, t("phase_copying"), current, total)
-
-            try:
-                staged = self._stage_for_import(source_files, staging_dir, report_copy_progress)
-                # Same one-time phase-transition line as log_import_found above, between copying
-                # and importing (asked for explicitly, matching MainActivity.kt's own
-                # log_import_importing_started -- see its own comment there for why this matters:
-                # without it, the log stays on "...copying..." for the entire copying phase, which
-                # has no per-file line of its own either, same reasoning as above).
-                self.loop.call_soon_threadsafe(
-                    self.log, "[info] " + t("log_import_importing_started", count=len(staged))
-                )
-                result = import_ebl.import_staged_ebl_files(
-                    [str(p) for p in staged], str(self.ebl_dir()), report_progress
-                )
-            finally:
-                shutil.rmtree(staging_dir, ignore_errors=True)
+            # Straight from the picked folder, no copy to a scratch directory first (Android's
+            # stageForImport() only exists because a SAF content:// Uri is not a real path; here
+            # url.path already is one, and import_staged_ebl_files() only ever *copies* from its
+            # sources, never moves or deletes them) -- a second full copy of a whole SD card was just
+            # extra time and disk for nothing.
+            result = import_ebl.import_staged_ebl_files(
+                [str(p) for p in source_files], str(self.ebl_dir()), report_progress
+            )
             # A same name that turned out to hold different content (a reformatted SD card
             # reusing an EBLnnnnnn folder, or two unrelated loose files sharing a name) -- see
             # import_ebl.py's own doc comment. Nothing was lost (both are kept, under different
