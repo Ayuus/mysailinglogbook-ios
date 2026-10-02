@@ -18,6 +18,11 @@ diverge from it where the platform genuinely forces a difference (e.g. no Chaquo
 different notification/background-execution rules, a
 UI toolkit that can't reproduce something pixel-for-pixel); anything that *can* match, should.
 
+**Texts:** the strings both apps share (boat-mode status lines, import log lines, settings labels, ...)
+live in the nmea2log repo's `src/nmea2log/app_texts.py` -- `translations.py` here only holds what exists
+on iOS alone and merges the shared ones in. Change a shared wording there once; the Android app's
+`strings.xml` is generated from the same file, so the two cannot drift apart again.
+
 ## Status
 
 **Real app; download/build/view/settings/appearance/language/publish/boat mode are all done and
