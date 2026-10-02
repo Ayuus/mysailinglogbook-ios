@@ -11,7 +11,7 @@ def test_a_fresh_store_has_the_same_defaults_as_android(tmp_path):
 
     assert store.w2k2_user == ""
     assert store.w2k2_password == ""
-    assert store.auto_sync_on_launch is True
+    assert store.auto_sync_on_launch is False
     assert store.auto_publish_after_build is True
     assert store.min_stop_minutes == DEFAULT_MIN_STOP_MINUTES
     assert store.sftp_port == DEFAULT_SFTP_PORT

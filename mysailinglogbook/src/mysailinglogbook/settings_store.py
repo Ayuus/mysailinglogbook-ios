@@ -35,9 +35,9 @@ _DEFAULTS: Dict[str, Any] = {
     "boat_name": "",
     "mmsi": "",
     "call_sign": "",
-    # On by default -- see SettingsStore.kt's own comment: preserves the original, always-on
-    # behavior for anyone upgrading.
-    "auto_sync_on_launch": True,
+    # Off by default (asked for explicitly) -- see SettingsStore.kt's own comment: reverses the
+    # original always-on-for-upgraders default.
+    "auto_sync_on_launch": False,
     "auto_publish_after_build": True,
     "min_stop_minutes": DEFAULT_MIN_STOP_MINUTES,
     # Never defaulted (see SettingsStore.kt) -- a brand new install shouldn't show a real
