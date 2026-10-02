@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 import toga
-from rubicon.objc import Block, NSObject, ObjCClass, ObjCInstance, ObjCProtocol, objc_method
+from rubicon.objc import Block, CGPoint, NSObject, ObjCClass, ObjCInstance, ObjCProtocol, objc_method
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
 from nmea2log import android_entry, import_ebl
@@ -27,6 +27,9 @@ _UIApplication = ObjCClass("UIApplication")
 
 # See MySailingLogbook._trim_log_if_needed()'s own doc comment for why this exists at all.
 _MAX_LOG_LINES = 1000
+
+# How long log lines are collected before the log view is updated once -- see MySailingLogbook.log().
+_LOG_FLUSH_INTERVAL_S = 0.25
 
 # MainActivity.kt's own collapsed log height after a run (150dp), see _show_logbook_with_log_strip().
 _LOG_STRIP_HEIGHT = 150
@@ -277,11 +280,20 @@ class MySailingLogbook(toga.App):
         # one is currently showing; see _show_log_content()/_show_logbook_content().
         self.log_view = toga.MultilineTextInput(readonly=True, style=Pack(flex=1))
         self.web_view = toga.WebView(style=Pack(flex=0, display="none"))
+        # toga's WebView reports a minimum height of 100 even while hidden (display none, height 0 and
+        # flex 0 included), which kept 100pt of the screen reserved under the log -- found in practice:
+        # a blank band below the last log line, with the log only 600pt tall on a 700pt area. Shown, it
+        # takes all remaining space (flex 1), so its minimum never mattered.
+        self.web_view._MIN_HEIGHT = 0
         self.showing_local_logbook = False
         # True while the logbook shows as a run's result with the log still visible as a strip
         # next to it (see _show_logbook_with_log_strip()) -- MainActivity.kt's own
         # logbookShownAsRunResult. on_build() reads it.
         self.logbook_shown_as_run_result = False
+        # The log's lines live here, not only in the UITextView: log() appends to this list and a
+        # short timer pushes it to the view once (see log()/_flush_log()).
+        self._log_lines = []
+        self._log_flush_scheduled = False
         # Both children stay in content_area permanently -- _show_log_content()/
         # _show_logbook_content() toggle which one is visible (display+visibility, same
         # mechanism settings_screen.py's own wordpress_box/sftp_box already use) rather than
@@ -300,7 +312,7 @@ class MySailingLogbook(toga.App):
         # progressLabel exactly (same 5 phases, same wording, see update_progress_bar()'s own doc
         # comment below), asked for explicitly ("zoveel mogelijk identiek aan android"). Hidden
         # (style.visibility) rather than shown at 0/0 until the first real update_progress_bar()
-        # call, same as Android's own View.GONE default. progress_bar's own margin_bottom is set
+        # call, same as Android's own View.GONE default. progress_bar's own margin is set
         # dynamically in update_progress_bar() -- toga_iOS's MainWindow (see window.py's own
         # content_native_layout()) only ever insets its content from the *top* (status bar/
         # navigation bar height); nothing insets it from the bottom, so a fixed guess here either
@@ -308,10 +320,10 @@ class MySailingLogbook(toga.App):
         # the same point value reads much bigger against a shorter screen) -- found in practice,
         # both ways, testing this on the simulator.
         self.progress_label = toga.Label(
-            "", style=Pack(margin=(4, 8, 0, 8), display="none", visibility="hidden", height=0)
+            "", style=Pack(display="none", visibility="hidden", height=0)
         )
         self.progress_bar = toga.ProgressBar(
-            max=1, value=0, style=Pack(margin=(2, 8, 4, 8), display="none", visibility="hidden", height=0)
+            max=1, value=0, style=Pack(display="none", visibility="hidden", height=0)
         )
 
         # toolbar + content_area + progress bar -- the "main" screen this swaps back to from
@@ -426,41 +438,65 @@ class MySailingLogbook(toga.App):
         self.main_window._impl.native.overrideUserInterfaceStyle = style
 
     def log(self, line: str) -> None:
-        # Same "only follow along if already at the bottom" behavior as MainActivity's own
-        # refreshLogView()/isLogScrolledToBottom(): checked *before* appending, so a user who
-        # scrolled up to read an earlier line doesn't get yanked back down to the bottom the
-        # moment the next line arrives. Toga's own MultilineTextInput has no cross-platform way
-        # to query scroll position, so this reads the native UITextView directly (it's a
-        # UIScrollView subclass) -- same contentOffset/contentSize/bounds properties toga_iOS's
-        # own ScrollContainer backend already reads the same way.
-        was_at_bottom = self._log_is_scrolled_to_bottom()
-        self.log_view.value += line + "\n"
-        self._trim_log_if_needed()
-        if was_at_bottom:
-            self.log_view.scroll_to_bottom()
+        """Adds a line to the log. The view itself is only updated by _flush_log(), at most every
+        _LOG_FLUSH_INTERVAL_S: found in practice (an import of 2326 files, one line each, then the
+        decode progress after it), setting the whole UITextView text on every line -- plus reading it
+        back and splitting it to trim -- kept the main thread so busy the log could not be scrolled
+        at all, and the scroll-to-bottom after each set ran before UIKit had laid the new text out, so
+        it never reached the end. Trimmed to _MAX_LOG_LINES (once past double that): the full history
+        is already persisted to nmea2log.log on disk (see android_entry.py's set_log_file()); this
+        only trims what is kept in memory/on screen."""
+        self._log_lines.append(line)
+        if len(self._log_lines) > _MAX_LOG_LINES * 2:
+            del self._log_lines[:-_MAX_LOG_LINES]
+        if not self._log_flush_scheduled:
+            self._log_flush_scheduled = True
+            self.loop.call_later(_LOG_FLUSH_INTERVAL_S, self._flush_log)
 
-    def _trim_log_if_needed(self) -> None:
-        """Caps the in-app log view at _MAX_LOG_LINES, trimmed back down to it once past double
-        that -- found in practice: an unbounded UITextView.text (Toga's own MultilineTextInput.
-        value setter replaces the *whole* string on every append) turns sluggish, barely
-        scrollable after a long session piles up thousands of decode-progress/retry lines. The
-        full history is never lost -- it's already persisted to nmea2log.log on disk regardless
-        of what this view shows (see android_entry.py's own set_log_file()); this only trims
-        what's kept in memory/on screen. Checked with a hysteresis band (trim only once past
-        double the cap, back down to the cap) rather than every single line, which would mean
-        reconstructing this potentially-large string on every append instead of only rarely.
-        """
-        lines = self.log_view.value.split("\n")
-        if len(lines) <= _MAX_LOG_LINES * 2:
-            return
-        self.log_view.value = "\n".join(lines[-_MAX_LOG_LINES:])
+    def _flush_log(self) -> None:
+        # Same "only follow along if already at the bottom" behavior as MainActivity's own
+        # refreshLogView()/isLogScrolledToBottom(): checked *before* the text changes, so a user
+        # who scrolled up to read an earlier line doesn't get yanked back down the moment the next
+        # line arrives (and keeps their position instead of the view jumping to the top).
+        self._log_flush_scheduled = False
+        native = self.log_view._impl.native
+        was_at_bottom = self._log_is_scrolled_to_bottom()
+        offset = native.contentOffset
+        self.log_view.value = "\n".join(self._log_lines) + "\n"
+        self._lay_out_log()
+        if was_at_bottom:
+            self._scroll_log_to_bottom()
+        else:
+            native.contentOffset = offset
+
+    def _lay_out_log(self) -> None:
+        """UIKit lays a UITextView's text out lazily, so right after the text changes its contentSize
+        is still the old one -- which is what made both the was-at-bottom check and the scroll to the
+        end come out wrong. Forces the layout now."""
+        native = self.log_view._impl.native
+        native.layoutManager.ensureLayoutForTextContainer(native.textContainer)
+        native.layoutIfNeeded()
+
+    def _scroll_log_to_bottom(self) -> None:
+        native = self.log_view._impl.native
+        self._lay_out_log()
+        end = native.contentSize.height - native.bounds.size.height + native.adjustedContentInset.bottom
+        native.contentOffset = CGPoint(0, max(end, 0))
+
+    def _scroll_log_to_bottom_soon(self) -> None:
+        """For when the log view is about to change size (shown again, or shrunk to a strip): once now
+        and once more after UIKit has applied the new frame."""
+        self._scroll_log_to_bottom()
+        self.loop.call_later(0.2, self._scroll_log_to_bottom)
+        self.log_view._impl.native.flashScrollIndicators()
 
     def _log_is_scrolled_to_bottom(self) -> bool:
         native = self.log_view._impl.native
         # A few points of slack, same reasoning as Android's own 4dp: scroll position/content
         # height can be off by a rounding point or two even while visually "at the bottom".
         slack = 4
-        return native.contentOffset.y + native.bounds.size.height >= native.contentSize.height - slack
+        end = native.contentSize.height + native.adjustedContentInset.bottom
+        return native.contentOffset.y + native.bounds.size.height >= end - slack
 
     def ebl_dir(self) -> Path:
         """Where downloaded/local .ebl files live -- same folder name as Android's own
@@ -553,7 +589,6 @@ class MySailingLogbook(toga.App):
             # with the log already showing, assembles.
             self.showing_local_logbook = False
             self._show_log_content()
-            self.log_view.scroll_to_bottom()
             return
         if self.boot_mode_controller.busy:
             self.showing_local_logbook = False
@@ -682,6 +717,7 @@ class MySailingLogbook(toga.App):
 
     def _show_log_content(self) -> None:
         self.logbook_shown_as_run_result = False
+        self.loop.call_soon(self._scroll_log_to_bottom_soon)
         self.web_view.style.display = "none"
         self.web_view.style.visibility = "hidden"
         self.web_view.style.flex = 0
@@ -715,7 +751,7 @@ class MySailingLogbook(toga.App):
         self.log_view.style.visibility = "visible"
         self.log_view.style.flex = 0
         self.log_view.style.height = _LOG_STRIP_HEIGHT
-        self.log_view.scroll_to_bottom()
+        self._scroll_log_to_bottom_soon()
         self.logbook_shown_as_run_result = True
 
     def update_progress_bar(self, phase: str, current: int, total: int) -> None:
@@ -743,7 +779,8 @@ class MySailingLogbook(toga.App):
         self.progress_bar.style.height = NONE
         # Re-read every call, not just once -- cheap, and the same rotation that changes the
         # home indicator's on-screen footprint can happen at any point while a run is in progress.
-        self.progress_bar.style.margin_bottom = self._bottom_safe_area_margin()
+        self.progress_label.style.margin = (4, 8, 0, 8)
+        self.progress_bar.style.margin = (2, 8, self._bottom_safe_area_margin(), 8)
         self.progress_bar.max = total
         self.progress_bar.value = current
         self.progress_label.text = t("progress_label_format", phase=phase, current=current, total=total)
@@ -765,6 +802,9 @@ class MySailingLogbook(toga.App):
         return int(round(inset)) + 4
 
     def hide_progress_bar(self) -> None:
+        # No margins while hidden either: display none keeps a widget's margins in the layout.
+        self.progress_label.style.margin = 0
+        self.progress_bar.style.margin = 0
         self.progress_label.style.display = "none"
         self.progress_label.style.visibility = "hidden"
         self.progress_label.style.height = 0
