@@ -30,6 +30,9 @@ _UIApplication = ObjCClass("UIApplication")
 # See MySailingLogbook._trim_log_if_needed()'s own doc comment for why this exists at all.
 _MAX_LOG_LINES = 1000
 
+# MainActivity.kt's own collapsed log height after a run (150dp), see _show_logbook_with_log_strip().
+_LOG_STRIP_HEIGHT = 150
+
 _UIView = ObjCClass("UIView")
 _UIColor = ObjCClass("UIColor")
 # Standard UIKit UIViewAnimationOptions bit values (not exposed as named constants anywhere in
@@ -277,6 +280,10 @@ class MySailingLogbook(toga.App):
         self.log_view = toga.MultilineTextInput(readonly=True, style=Pack(flex=1))
         self.web_view = toga.WebView(style=Pack(flex=0, display="none"))
         self.showing_local_logbook = False
+        # True while the logbook shows as a run's result with the log still visible as a strip
+        # next to it (see _show_logbook_with_log_strip()) -- MainActivity.kt's own
+        # logbookShownAsRunResult. on_build() reads it.
+        self.logbook_shown_as_run_result = False
         # Both children stay in content_area permanently -- _show_log_content()/
         # _show_logbook_content() toggle which one is visible (display+visibility, same
         # mechanism settings_screen.py's own wordpress_box/sftp_box already use) rather than
@@ -541,6 +548,15 @@ class MySailingLogbook(toga.App):
         self._start_background(self._run_import, url, busy_button=self.import_button)
 
     def on_build(self, widget):
+        if self.logbook_shown_as_run_result:
+            # Asked for explicitly (Android's buildButton does the same): with a run's own result
+            # showing next to a strip of the log, this tap only brings the log back -- a run takes
+            # minutes, and tapping here to read the log must not also start one. The next tap,
+            # with the log already showing, assembles.
+            self.showing_local_logbook = False
+            self._show_log_content()
+            self.log_view.scroll_to_bottom()
+            return
         if self.boot_mode_controller.busy:
             self.showing_local_logbook = False
             self._show_log_content()
@@ -667,6 +683,7 @@ class MySailingLogbook(toga.App):
         self._show_logbook_content()
 
     def _show_log_content(self) -> None:
+        self.logbook_shown_as_run_result = False
         self.web_view.style.display = "none"
         self.web_view.style.visibility = "hidden"
         self.web_view.style.flex = 0
@@ -677,6 +694,7 @@ class MySailingLogbook(toga.App):
         self.log_view.style.height = NONE
 
     def _show_logbook_content(self) -> None:
+        self.logbook_shown_as_run_result = False
         self.log_view.style.display = "none"
         self.log_view.style.visibility = "hidden"
         self.log_view.style.flex = 0
@@ -685,6 +703,22 @@ class MySailingLogbook(toga.App):
         self.web_view.style.height = NONE
         self.web_view.style.visibility = "visible"
         self.web_view.style.flex = 1
+
+    def _show_logbook_with_log_strip(self) -> None:
+        """The logbook with a small strip of the log kept above it -- MainActivity.kt's own
+        setLogExpanded(false) after a run (log first, 150dp tall, the WebView taking the rest).
+        Shown instead of covering the log completely, so a finished run's last lines stay
+        readable without a tap; _show_log_content() brings the whole log back."""
+        self.web_view.style.display = "pack"
+        self.web_view.style.height = NONE
+        self.web_view.style.visibility = "visible"
+        self.web_view.style.flex = 1
+        self.log_view.style.display = "pack"
+        self.log_view.style.visibility = "visible"
+        self.log_view.style.flex = 0
+        self.log_view.style.height = _LOG_STRIP_HEIGHT
+        self.log_view.scroll_to_bottom()
+        self.logbook_shown_as_run_result = True
 
     def update_progress_bar(self, phase: str, current: int, total: int) -> None:
         """Bottom progress bar + "phase: x/y" label -- mirrors MainActivity.kt's own
@@ -1025,7 +1059,7 @@ class MySailingLogbook(toga.App):
                 self.log("[ok] " + t("log_logbook_ready", count=result.get("trip_count")))
                 if show_logbook_on_success:
                     self.showing_local_logbook = True
-                    self._show_logbook_content()
+                    self._show_logbook_with_log_strip()
             elif result.get("cancelled"):
                 self.log("[info] " + t("log_cancelled"))
             else:
