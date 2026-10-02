@@ -249,10 +249,10 @@ _STRINGS = {
         "de": "Nach letzter Runde ausschalten",
     },
     "checkbox_boat_auto_start": {
-        "en": "Start automatically on launch",
-        "nl": "Automatisch starten bij openen",
-        "fr": "Démarrer automatiquement au lancement",
-        "de": "Automatisch starten beim Öffnen",
+        "en": "Turn on automatically on launch",
+        "nl": "Automatisch inschakelen bij starten",
+        "fr": "Activer automatiquement au démarrage",
+        "de": "Beim Start automatisch einschalten",
     },
     "boat_status_searching": {
         "en": "Boat mode: looking for the W2K-2...",
