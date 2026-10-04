@@ -8,13 +8,14 @@ reference behavior each of these will eventually need to match.
 
 import re
 import threading
+import time
 from pathlib import Path
 
 import toga
 from rubicon.objc import Block, CGPoint, NSObject, NSRange, ObjCClass, ObjCInstance, ObjCProtocol, objc_method
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
-from nmea2log import android_entry, import_ebl
+from nmea2log import android_entry, import_ebl, run_outcome
 from nmea2log.upload import UploadError, normalize_rest_upload_url, upload_via_rest
 
 from .boot_mode_controller import BootModeController
@@ -351,10 +352,8 @@ class MySailingLogbook(toga.App):
         self.main_window.show()
 
         # Mirrors SyncState.inProgress/cancelled on Android (MainActivity.runSync()'s own
-        # guard) -- only one sync/build runs at a time; tapping Download/Rebuild again while one
-        # is running is ignored for now (Android instead turns the button that started the run
-        # into its own cancel button -- not ported yet, see cancel_event below, which the
-        # plumbing already supports).
+        # guard) -- only one sync/build runs at a time; tapping the button that started the run
+        # again cancels it (_cancel_if_running()).
         self.sync_in_progress = False
         self.cancel_event = threading.Event()
         self._busy_button = None
@@ -423,7 +422,7 @@ class MySailingLogbook(toga.App):
             # either, same reasoning as the branch above.
             self.log("[info] " + t("log_hotspot_precheck_skipped"))
             return
-        self.log("[info] " + t("log_checking_for_w2k2", subnet=subnet_prefix))
+        self.log("[info] " + t("status_listing_files", subnet=subnet_prefix))
         self._start_background(self._run_download, subnet_prefix, busy_button=self.download_button)
 
     def apply_theme_mode(self) -> None:
@@ -566,9 +565,9 @@ class MySailingLogbook(toga.App):
         if subnet_prefix is None:
             self.showing_local_logbook = False
             self._show_log_content()
-            self.log("[info] " + t("log_no_hotspot"))
+            self.log("[info] " + t("status_hotspot_off"))
             return
-        self.log("[info] " + t("log_checking_for_w2k2", subnet=subnet_prefix))
+        self.log("[info] " + t("status_listing_files", subnet=subnet_prefix))
         self._start_background(self._run_download, subnet_prefix, busy_button=self.download_button)
 
     def on_import(self, widget):
@@ -625,7 +624,7 @@ class MySailingLogbook(toga.App):
             self._show_log_content()
             self.log("[info] " + t("log_build_already_running"))
             return
-        self.log("[info] " + t("log_building_from_local_files"))
+        self.log("[info] " + t("status_building_with_existing_data"))
         self._start_background(self._run_build_from_local_files, busy_button=self.build_button)
 
     def on_publish(self, widget):
@@ -649,7 +648,7 @@ class MySailingLogbook(toga.App):
             self._show_log_content()
             self.log("[info] " + t("log_fill_publish_settings"))
             return
-        self.log("[info] " + t("log_building_from_local_files"))
+        self.log("[info] " + t("status_building_with_existing_data"))
         self._start_background(self._run_build_and_publish, busy_button=self.publish_button)
 
     def _run_build_and_publish(self) -> None:
@@ -667,16 +666,17 @@ class MySailingLogbook(toga.App):
         )
         publish_failed = False
         if result.get("ok"):
-            publish_failed = not self._publish_logbook()
-        self._log_result(result, show_logbook_on_success=not publish_failed)
+            publish_failed = self._publish_attempt_failed()
+        self._log_result(result, "publish", publish_failed)
 
     def _publish_attempt_failed(self) -> bool:
-        """Runs the publish step after a build and says whether it failed -- MainActivity's own
-        publishFailed: nothing set up to publish to is not a failure (the logbook is shown as
-        usual), only an upload that was attempted and did not succeed is."""
+        """Runs the publish step after a build and says whether it failed (run_outcome.publish_failed():
+        nothing set up to publish to is not a failure, only an upload that was attempted and failed)."""
         published = self._publish_logbook()
         store = self.settings_store
-        return not published and (store.is_rest_upload_config_complete or store.is_sftp_config_complete)
+        return run_outcome.publish_failed(
+            published, store.is_rest_upload_config_complete, store.is_sftp_config_complete
+        )
 
     def _publish_logbook(self) -> bool:
         """The actual upload step, run on the same background thread as the build above -- see
@@ -747,7 +747,7 @@ class MySailingLogbook(toga.App):
         try:
             html = html_path.read_text(encoding="utf-8")
         except OSError as exc:
-            self.log("[error] " + t("log_logbook_display_failed", error=exc))
+            self.log("[error] " + t("error_logbook_display_failed", error=exc))
             return False
         # Same technique as MainActivity's own loadLogbookIntoWebView(): pass the HTML in as a
         # string with the file's own parent directory as the root/base URL (for any relative
@@ -908,15 +908,17 @@ class MySailingLogbook(toga.App):
         if busy_button is not None:
             # Left enabled (excluded from the disable loop below) -- pulsing a *disabled* button
             # would fight Toga's own disabled-state dimming, and Android's own equivalent button
-            # deliberately stays enabled too (tapping it again cancels instead -- not ported yet,
-            # so this just re-logs "already running" for now, same as any other button tapped
-            # mid-run, see on_download()/on_build()'s own guards).
+            # deliberately stays enabled too (tapping it again cancels, see _cancel_if_running()).
             _set_busy_pulse(busy_button, True)
         threading.Thread(target=self._run_and_finish, args=(target, args), daemon=True).start()
 
     def _run_and_finish(self, target, args) -> None:
         try:
             target(*args)
+        except Exception as e:
+            # Whatever the run did not catch itself: said in the log instead of the run ending silently
+            # (MainActivity.runDownload() catches the same way).
+            self.loop.call_soon_threadsafe(self.log, "[error] " + t("error_unexpected", detail=str(e)))
         finally:
             self.loop.call_soon_threadsafe(self._on_run_finished)
 
@@ -1053,7 +1055,7 @@ class MySailingLogbook(toga.App):
         publish_failed = False
         if result.get("ok") and self.settings_store.auto_publish_after_build:
             publish_failed = self._publish_attempt_failed()
-        self._log_result(result, show_logbook_on_success=not publish_failed)
+        self._log_result(result, "build", publish_failed)
 
     # Runs on the background thread started by _start_background() -- see the comment above
     # _run_build_from_local_files().
@@ -1077,34 +1079,47 @@ class MySailingLogbook(toga.App):
         publish_failed = False
         if result.get("ok") and self.settings_store.auto_publish_after_build:
             publish_failed = self._publish_attempt_failed()
-        self._log_result(result, show_logbook_on_success=not publish_failed)
+        self._log_result(result, "download", publish_failed)
 
-    def _log_result(self, result: dict, show_logbook_on_success: bool = True) -> None:
-        """show_logbook_on_success mirrors MainActivity.kt's own showSyncResult(): on a
-        successful build (download, local assemble, or publish alike), the fresh logbook is
-        shown automatically, same as Android already does -- found in practice, missing
-        entirely here before this: iOS just stayed on the log with no indication anything more
-        should happen, so a successful run silently looked incomplete. False only when a
-        publish that was actually attempted (auto-publish-after-build, or the Publish button
-        itself) failed -- same as Android's own publishFailed branch -- so the failure's own log
-        line/error stays visible instead of being hidden behind the logbook immediately after.
-        """
+    def _log_result(self, result: dict, initiator: str, publish_failed: bool = False) -> None:
+        """The end of a run: run_outcome.describe_result() (shared with the Android app) decides which
+        lines to log and what to show, this only turns that into the log view and the WebView. On a
+        successful run the fresh logbook is shown with the log as a strip next to it; the log stays in
+        front when a publish that was attempted failed, so its error stays visible."""
+        outcome = run_outcome.describe_result(result, initiator, publish_failed)
 
         def show():
-            if result.get("ok"):
-                self.log("[ok] " + t("log_logbook_ready", count=result.get("trip_count")))
+            for line in outcome.lines:
+                self.log(self._outcome_line_text(line))
+            if outcome.show == run_outcome.SHOW_LOGBOOK:
                 # The run has just written a new logbook.html: load it, or the WebView would show the
                 # one loaded earlier (or nothing at all on a first run) -- MainActivity.showSyncResult()
                 # does the same via loadLogbookIntoWebView().
-                if show_logbook_on_success and self._load_logbook_into_web_view():
+                if self._load_logbook_into_web_view():
                     self.showing_local_logbook = True
                     self._show_logbook_with_log_strip()
-            elif result.get("cancelled"):
-                self.log("[info] " + t("log_cancelled"))
-            else:
-                self.log(f"[error] {result.get('error')}")
+            elif outcome.show == run_outcome.SHOW_EXISTING_LOGBOOK:
+                # Not at the boat: the logbook that is already there is made ready behind the log.
+                if self.output_html_path().exists():
+                    self._load_logbook_into_web_view()
+            if result.get("ok"):
+                # One closing line for the whole run, publish included -- the same marker the Android
+                # app logs ("Voltooid: 14:05").
+                self.log(t("log_sync_done_at", time=time.strftime("%H:%M")))
 
         self.loop.call_soon_threadsafe(show)
+
+    @staticmethod
+    def _outcome_line_text(line) -> str:
+        """The text of a run_outcome.Line with its [level] tag, as every other log line."""
+        if line.text is not None:
+            text = line.text
+        else:
+            params = dict(line.params)
+            if "error" in params and params["error"] is None:
+                params["error"] = t("error_unknown")
+            text = t(line.key, **params)
+        return f"[{line.level}] {text}"
 
 
 def main():

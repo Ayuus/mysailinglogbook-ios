@@ -45,29 +45,6 @@ _STRINGS = {
         "fr": "Un assemblage est déjà en cours.",
         "de": "Es läuft bereits eine Zusammenstellung.",
     },
-    "log_no_hotspot": {
-        "en": "No WiFi network detected -- turn on your phone's hotspot (or join the "
-        "W2K-2's own network) first.",
-        "nl": "Geen wifinetwerk gevonden -- zet eerst de hotspot van je telefoon aan (of "
-        "verbind met het eigen netwerk van de W2K-2).",
-        "fr": "Aucun réseau WiFi détecté -- activez d'abord le partage de connexion de "
-        "votre téléphone (ou rejoignez le réseau propre du W2K-2).",
-        "de": "Kein WLAN-Netzwerk gefunden -- schalten Sie zuerst den Hotspot Ihres "
-        "Telefons ein (oder verbinden Sie sich mit dem eigenen Netzwerk des W2K-2).",
-    },
-    "log_checking_for_w2k2": {
-        # {subnet} substituted at call time.
-        "en": "Checking {subnet}0/24 for a W2K-2...",
-        "nl": "{subnet}0/24 controleren op een W2K-2...",
-        "fr": "Recherche d'un W2K-2 sur {subnet}0/24...",
-        "de": "Suche nach einem W2K-2 auf {subnet}0/24...",
-    },
-    "log_building_from_local_files": {
-        "en": "Assembling logbook with existing data...",
-        "nl": "Logboek samenstellen met bestaande data...",
-        "fr": "Assemblage du carnet avec les données existantes...",
-        "de": "Logbuch mit vorhandenen Daten zusammenstellen...",
-    },
     "log_import_already_running": {
         "en": "An import is already running.",
         "nl": "Er loopt al een import.",
@@ -98,26 +75,6 @@ _STRINGS = {
         "de": "Veröffentlichen über SFTP wird auf iOS noch nicht unterstützt (keine "
         "SSH-Bibliothek läuft auf dieser Plattform) -- verwenden Sie stattdessen die "
         "WordPress-Veröffentlichung in den Einstellungen.",
-    },
-    "log_logbook_display_failed": {
-        # {error} substituted at call time.
-        "en": "Logbook could not be displayed: {error}",
-        "nl": "Logboek kon niet worden getoond: {error}",
-        "fr": "Le carnet n'a pas pu être affiché : {error}",
-        "de": "Logbuch konnte nicht angezeigt werden: {error}",
-    },
-    "log_logbook_ready": {
-        # {count} substituted at call time.
-        "en": "Logbook ready ({count} trip(s)).",
-        "nl": "Logboek klaar ({count} reis(en)).",
-        "fr": "Carnet prêt ({count} trajet(s)).",
-        "de": "Logbuch fertig ({count} Fahrt(en)).",
-    },
-    "log_cancelled": {
-        "en": "Cancelled.",
-        "nl": "Geannuleerd.",
-        "fr": "Annulé.",
-        "de": "Abgebrochen.",
     },
 }
 
