@@ -36,10 +36,11 @@ _NSString = ObjCClass("NSString")
 
 # What the form leaves free on each side of the screen (Pack margin=16 on the form box).
 _FORM_MARGIN = 16
-# A Switch with no text of its own: the control (~51pt) plus the stack's spacing (10) -- see toga_iOS Switch.
-_SWITCH_WIDTH = 61
-# The "Clear" button of a cache row plus the gap before it.
-_CACHE_BUTTON_WIDTH = 72 + 8
+# A Switch with no text of its own: the control (~52pt) plus the stack's spacing (10), and some room to spare:
+# a label that just fits would still push the row wider than the screen (seen on an iPhone 17).
+_SWITCH_WIDTH = 61 + 24
+# The "Clear" button of a cache row plus the gap before it, and the same room to spare.
+_CACHE_BUTTON_WIDTH = 72 + 8 + 16
 
 
 def _text_width(text: str, font) -> float:
