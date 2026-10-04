@@ -671,6 +671,14 @@ class MySailingLogbook(toga.App):
             publish_failed = not self._publish_logbook()
         self._log_result(result, show_logbook_on_success=not publish_failed)
 
+    def _publish_attempt_failed(self) -> bool:
+        """Runs the publish step after a build and says whether it failed -- MainActivity's own
+        publishFailed: nothing set up to publish to is not a failure (the logbook is shown as
+        usual), only an upload that was attempted and did not succeed is."""
+        published = self._publish_logbook()
+        store = self.settings_store
+        return not published and (store.is_rest_upload_config_complete or store.is_sftp_config_complete)
+
     def _publish_logbook(self) -> bool:
         """The actual upload step, run on the same background thread as the build above -- see
         LogbookPublisher.kt's own publish() for the Android original this mirrors (REST preferred
@@ -725,21 +733,28 @@ class MySailingLogbook(toga.App):
             self._show_log_content()
             return
 
-        html_path = self.output_html_path()
-        if not html_path.exists():
+        if not self.output_html_path().exists():
             self.log("[info] " + t("log_no_logbook_to_view"))
             return
+        if not self._load_logbook_into_web_view():
+            return
+        self.showing_local_logbook = True
+        self._show_logbook_content()
+
+    def _load_logbook_into_web_view(self) -> bool:
+        """MainActivity's own loadLogbookIntoWebView(): puts the current logbook.html into the WebView.
+        False (after logging why) when it could not be read."""
+        html_path = self.output_html_path()
         try:
             html = html_path.read_text(encoding="utf-8")
         except OSError as exc:
             self.log("[error] " + t("log_logbook_display_failed", error=exc))
-            return
+            return False
         # Same technique as MainActivity's own loadLogbookIntoWebView(): pass the HTML in as a
         # string with the file's own parent directory as the root/base URL (for any relative
         # resource references), rather than pointing the WebView straight at a file:// URL.
         self.web_view.set_content(f"file://{html_path.parent}/", html)
-        self.showing_local_logbook = True
-        self._show_logbook_content()
+        return True
 
     def _show_log_content(self) -> None:
         self.logbook_shown_as_run_result = False
@@ -1033,7 +1048,7 @@ class MySailingLogbook(toga.App):
         # show_logbook_on_success param, which is what actually shows it.
         publish_failed = False
         if result.get("ok") and self.settings_store.auto_publish_after_build:
-            publish_failed = not self._publish_logbook()
+            publish_failed = self._publish_attempt_failed()
         self._log_result(result, show_logbook_on_success=not publish_failed)
 
     # Runs on the background thread started by _start_background() -- see the comment above
@@ -1057,7 +1072,7 @@ class MySailingLogbook(toga.App):
         # before this, matching MainActivity.kt's own runSync() gate on the same setting.
         publish_failed = False
         if result.get("ok") and self.settings_store.auto_publish_after_build:
-            publish_failed = not self._publish_logbook()
+            publish_failed = self._publish_attempt_failed()
         self._log_result(result, show_logbook_on_success=not publish_failed)
 
     def _log_result(self, result: dict, show_logbook_on_success: bool = True) -> None:
@@ -1074,7 +1089,10 @@ class MySailingLogbook(toga.App):
         def show():
             if result.get("ok"):
                 self.log("[ok] " + t("log_logbook_ready", count=result.get("trip_count")))
-                if show_logbook_on_success:
+                # The run has just written a new logbook.html: load it, or the WebView would show the
+                # one loaded earlier (or nothing at all on a first run) -- MainActivity.showSyncResult()
+                # does the same via loadLogbookIntoWebView().
+                if show_logbook_on_success and self._load_logbook_into_web_view():
                     self.showing_local_logbook = True
                     self._show_logbook_with_log_strip()
             elif result.get("cancelled"):
