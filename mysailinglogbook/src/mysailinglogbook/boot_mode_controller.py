@@ -23,7 +23,6 @@ from typing import Optional
 
 from nmea2log import android_entry
 from nmea2log.bootmode import (
-    BoatSnapshot,
     BootModeConfig,
     BootModeMachine,
     Notify,
@@ -39,61 +38,29 @@ from nmea2log.bootmode import (
     RoundOutcome,
     ScheduleTick,
     Start,
+    STATUS_TEXT_KEYS,
     StartRound,
     Stop,
     StopService,
     Tick,
+    round_outcome_from_result,
 )
 
 from .network import detect_subnet_prefix
 from .translations import t
-
-_BOAT_STATUS_KEYS = {
-    "SEARCHING": "boat_status_searching",
-    "ROUND_STARTED": "boat_status_round_started",
-    "ROUND_DONE": "boat_status_round_done",
-    "ROUND_FAILED": "boat_status_round_failed",
-    "W2K_NOT_FOUND_RETRY": "boat_status_w2k2_not_found_retry",
-    "HARBOUR_FINAL": "boat_status_harbour_final",
-    "LEFT_BOAT": "boat_status_left_boat",
-    "LEFT_BOAT_NOTHING_TO_PUBLISH": "boat_status_left_boat_nothing",
-    "WAITING_IN_PORT": "boat_status_waiting_in_port",
-    "PUBLISH_STARTED": "boat_status_publish_started",
-    "PUBLISH_OK": "boat_status_publish_ok",
-    "PUBLISH_FAILED": "boat_status_publish_failed",
-    "STOPPED": "boat_status_stopped",
-}
-
 
 def format_status(kind: str, next_at_ms: Optional[int]) -> Optional[str]:
     """The (translated) text for a bootmode.Status name -- same role as BootStatusText.kt's own
     format(). None for a kind this version does not know (mirrors the Kotlin original's own
     fallback), so a future bootmode.py addition doesn't crash an app that hasn't been updated for
     it yet, just silently shows nothing for that one status."""
-    key = _BOAT_STATUS_KEYS.get(kind)
+    key = STATUS_TEXT_KEYS.get(kind)
     if key is None:
         return None
     if next_at_ms is None:
         return t(key)
     time_text = time.strftime("%H:%M", time.localtime(next_at_ms / 1000))
     return t(key, time=time_text)
-
-
-def round_outcome_from_result(result: dict) -> RoundOutcome:
-    """[result] is android_entry.sync_from_w2k2()'s own return dict -- see that function's doc
-    comment for its exact shape. Pulled out of _run_round() as its own pure function so the
-    mapping itself (cancelled/failed/ok, and BoatSnapshot construction) is unit-testable without
-    any real network I/O, mirroring W2kBootExecutor.kt's own runRound() -- same three outcomes,
-    same "cancelled counts as failed" and "downloaded_count floored at 0" choices."""
-    if result.get("cancelled"):
-        return RoundFailed(message=result.get("error") or "cancelled")
-    if not result.get("ok"):
-        return RoundFailed(message=result.get("error") or "unknown error")
-    boat = result.get("boat_state")
-    return RoundOk(
-        downloaded_count=max(result.get("downloaded_count", 0), 0),
-        boat=BoatSnapshot.from_dict(boat) if boat else None,
-    )
 
 
 class BootModeController:
