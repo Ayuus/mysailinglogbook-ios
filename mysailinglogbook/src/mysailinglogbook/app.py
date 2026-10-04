@@ -15,6 +15,7 @@ from rubicon.objc import Block, CGPoint, NSObject, NSRange, ObjCClass, ObjCInsta
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
 from nmea2log import android_entry, app_constants, import_ebl, run_outcome
+from nmea2log import log as nmea_log
 from nmea2log.upload import UploadError, normalize_rest_upload_url, upload_via_rest
 
 from .boot_mode_controller import BootModeController
@@ -41,6 +42,9 @@ _LOG_FLUSH_INTERVAL_S = app_constants.LOG_REFRESH_INTERVAL_MS / 1000
 _LOG_STRIP_HEIGHT = app_constants.LOG_STRIP_HEIGHT
 
 _UIView = ObjCClass("UIView")
+_UIFont = ObjCClass("UIFont")
+_NSAttributedString = ObjCClass("NSAttributedString")
+_NSMutableAttributedString = ObjCClass("NSMutableAttributedString")
 _UIColor = ObjCClass("UIColor")
 # Standard UIKit UIViewAnimationOptions bit values (not exposed as named constants anywhere in
 # toga_iOS -- these are stable, documented Apple values, safe to hardcode).
@@ -143,6 +147,12 @@ def _set_idle_timer_disabled(disabled: bool) -> None:
             _UIApplication.sharedApplication().idleTimerDisabled = disabled
         except Exception:
             pass
+
+
+def _hex_color(value: str):
+    """A UIColor from a "#RRGGBB" string."""
+    red, green, blue = (int(value[index:index + 2], 16) / 255 for index in (1, 3, 5))
+    return _UIColor.colorWithRed(red, green=green, blue=blue, alpha=1.0)
 
 
 class ProgressCallback:
@@ -432,7 +442,13 @@ class MySailingLogbook(toga.App):
         it), setting the whole UITextView text on every line kept the main thread so busy the log could
         not be scrolled at all. The full history stays available (up to _MAX_LOG_LINES) and is also in
         nmea2log.log on disk (see android_entry.py's set_log_file())."""
-        self._log_lines.append(line)
+        # A line the app made itself has no timestamp yet (Python's have): give it one like the rest and
+        # put it in nmea2log.log too, as the Android app does (AppLog) -- the log and the file then tell
+        # the same story.
+        stamped = nmea_log.stamp_line(line)
+        if stamped != line:
+            self._append_to_log_file(stamped)
+        self._log_lines.append(stamped)
         if len(self._log_lines) > _MAX_LOG_LINES:
             del self._log_lines[:-_LOG_TRIM_TO]
             self._log_shown = 0
@@ -440,6 +456,35 @@ class MySailingLogbook(toga.App):
         if not self._log_flush_scheduled:
             self._log_flush_scheduled = True
             self.loop.call_later(_LOG_FLUSH_INTERVAL_S, self._flush_log)
+
+    def _append_to_log_file(self, stamped_line: str) -> None:
+        """A line made by the app itself, added to nmea2log.log; failing is never worth breaking the app."""
+        try:
+            with open(self.paths.data / app_constants.LOG_FILE_NAME, "a", encoding="utf-8") as log_file:
+                log_file.write(stamped_line + "\n")
+        except OSError:
+            pass
+
+    def _attributed_log_text(self, lines):
+        """The lines as attributed text: errors in red and warnings in yellow, both bold, like the Android
+        log (app_constants decides which lines are which, and the colours)."""
+        native = self.log_view._impl.native
+        # textColor is nil until something sets it: then the text is drawn in the system label colour.
+        font, color = native.font, native.textColor or _UIColor.labelColor()
+        bold = _UIFont.fontWithDescriptor(font.fontDescriptor.fontDescriptorWithSymbolicTraits(2), size=font.pointSize)
+        error_color = _hex_color(app_constants.LOG_ERROR_COLOR)
+        warning_color = _hex_color(app_constants.LOG_WARNING_COLOR)
+        text = _NSMutableAttributedString.alloc().init()
+        for line in lines:
+            kind = app_constants.classify_line(line)
+            if kind == "error":
+                attributes = {"NSFont": bold, "NSColor": error_color}
+            elif kind == "warning":
+                attributes = {"NSFont": bold, "NSColor": warning_color}
+            else:
+                attributes = {"NSFont": font, "NSColor": color}
+            text.appendAttributedString(_NSAttributedString.alloc().initWithString(line + "\n", attributes=attributes))
+        return text
 
     def _flush_log(self) -> None:
         # Same "only follow along if already at the bottom" behavior as MainActivity's own
@@ -452,14 +497,12 @@ class MySailingLogbook(toga.App):
         offset = native.contentOffset
         storage = native.textStorage
         if self._log_rebuild or self._log_shown == 0 or storage.length() == 0:
-            # The first lines (set through toga so the text gets the widget's font and colour), or
-            # after lines were dropped from the front.
-            self.log_view.value = "\n".join(self._log_lines) + "\n"
+            # The first lines, or after lines were dropped from the front.
+            native.attributedText = self._attributed_log_text(self._log_lines)
             self._log_rebuild = False
         elif self._log_shown < len(self._log_lines):
-            # Appended to the existing text, which keeps the font and colour of the text before it.
-            added = "\n".join(self._log_lines[self._log_shown:]) + "\n"
-            storage.replaceCharactersInRange(NSRange(storage.length(), 0), withString=added)
+            # Appended to the existing text.
+            storage.appendAttributedString(self._attributed_log_text(self._log_lines[self._log_shown:]))
         self._log_shown = len(self._log_lines)
         if was_at_bottom:
             self._scroll_log_to_bottom()
