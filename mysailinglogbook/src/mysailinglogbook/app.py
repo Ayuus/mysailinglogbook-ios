@@ -854,6 +854,11 @@ class MySailingLogbook(toga.App):
         self.progress_bar.style.height = 0
 
     def on_boat_mode(self, widget):
+        # The mode reports through the log, so bring it back over the logbook -- like a download or
+        # an assemble does when it starts (MainActivity.toggleBootMode() does the same); otherwise
+        # its lines land in a log nobody can see.
+        self.showing_local_logbook = False
+        self._show_log_content()
         if self.boot_mode_controller.active:
             self.boot_mode_controller.stop()
         else:
