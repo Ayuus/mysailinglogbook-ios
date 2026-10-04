@@ -6,7 +6,6 @@ status area, logbook view) are the same; see the Android app's MainActivity.kt f
 reference behavior each of these will eventually need to match.
 """
 
-import re
 import threading
 import time
 from pathlib import Path
@@ -53,19 +52,6 @@ _UI_IMAGE_RENDERING_MODE_ALWAYS_TEMPLATE = 2
 _UIDocumentPickerViewController = ObjCClass("UIDocumentPickerViewController")
 _UTType = ObjCClass("UTType")
 _UIDocumentPickerDelegate = ObjCProtocol("UIDocumentPickerDelegate")
-
-# Same two signals SyncProgress.kt's own decodeRegex/buildPhaseMarkers parse out of the shared
-# nmea2log log lines (decode and build-trips have no per-file callback of their own, unlike
-# download/copying/importing) -- ported here verbatim so MySailingLogbook.update_progress_bar()
-# gets the same phase/current/total for these two phases as Android does.
-_DECODE_PROGRESS_RE = re.compile(r"decoded (\d+)/(\d+) logfile\(s\) so far")
-_BUILD_PHASE_MARKERS = [
-    re.compile(r"Building trips from \d+ GPS position\(s\)"),
-    re.compile(r"\d+ navigation samples merged, classifying trips"),
-    re.compile(r"\d+ run\(s\) classified, computing per-trip statistics"),
-    re.compile(r"\d+ trip\(s\) found, writing logbook"),
-]
-
 
 class _ImportDocumentPickerDelegate(NSObject, protocols=[_UIDocumentPickerDelegate]):
     """UIDocumentPickerViewController's own delegate, defined here via rubicon-objc's custom-
@@ -190,20 +176,13 @@ class ProgressCallback:
 
     def onLogLine(self, line):
         self.app.loop.call_soon_threadsafe(self.app.log, line)
-        # Same two regex-parsed phases as MainActivity.kt's own handleLogLine() (see
-        # _DECODE_PROGRESS_RE/_BUILD_PHASE_MARKERS above): decode and build-trips have no
-        # per-file callback of their own, only these markers in the shared nmea2log log lines.
-        decode_match = _DECODE_PROGRESS_RE.search(line)
-        if decode_match:
-            current, total = int(decode_match.group(1)), int(decode_match.group(2))
-            self.app.loop.call_soon_threadsafe(self.app.update_progress_bar, t("phase_decoding"), current, total)
-            return
-        for step, marker in enumerate(_BUILD_PHASE_MARKERS):
-            if marker.search(line):
-                self.app.loop.call_soon_threadsafe(
-                    self.app.update_progress_bar, t("phase_building_trips"), step + 1, len(_BUILD_PHASE_MARKERS)
-                )
-                break
+
+    def onProgress(self, phase, current, total):
+        """Decoding and building the trips have no per-file callback of their own: nmea2log recognises their
+        log lines (progress.py, shared with the Android app) and reports (phase, current, total) here."""
+        label = {"decoding": "phase_decoding", "building_trips": "phase_building_trips"}.get(phase)
+        if label is not None:
+            self.app.loop.call_soon_threadsafe(self.app.update_progress_bar, t(label), current, total)
 
     def onDownloadComplete(self):
         pass
