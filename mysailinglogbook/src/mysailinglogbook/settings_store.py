@@ -25,49 +25,14 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
-DEFAULT_SFTP_PORT = 22
-# Same default as build_arg_parser()'s own --min-stop-minutes (see cli.py in the nmea2log repo).
-DEFAULT_MIN_STOP_MINUTES = 10.0
+from nmea2log import app_settings
 
-_DEFAULTS: Dict[str, Any] = {
-    "w2k2_user": "",
-    "w2k2_password": "",
-    "boat_name": "",
-    "mmsi": "",
-    "call_sign": "",
-    # Off by default (asked for explicitly) -- see SettingsStore.kt's own comment: reverses the
-    # original always-on-for-upgraders default.
-    "auto_sync_on_launch": False,
-    "auto_publish_after_build": True,
-    "min_stop_minutes": DEFAULT_MIN_STOP_MINUTES,
-    # Never defaulted (see SettingsStore.kt) -- a brand new install shouldn't show a real
-    # server hostname/path despite nothing ever being entered on that install.
-    "rest_upload_url": "",
-    "rest_upload_user": "",
-    "rest_upload_password": "",
-    "sftp_host": "",
-    "sftp_port": DEFAULT_SFTP_PORT,
-    "sftp_user": "",
-    "sftp_password": "",
-    "sftp_remote_path": "",
-    "sftp_host_key_fingerprint": "",
-    "boot_round_interval_minutes": 60,
-    "boot_publish_every_round": False,
-    "boot_final_on_harbour": True,
-    "boot_harbour_stationary_minutes": 30,
-    "boot_harbour_engine_off_minutes": 10,
-    "boot_final_on_left_boat": True,
-    "boot_left_boat_minutes": 20,
-    "boot_stop_after_final": False,
-    "boot_auto_start": False,
-    # "light" / "dark" / "system" -- see SettingsStore.kt's own themeMode for the Android
-    # equivalent. Defaults to "system" here (not "dark" like Android): this app's UI has always
-    # simply followed whatever UIKit resolves from the phone's own Appearance setting, so "system"
-    # preserves that existing behavior for anyone upgrading, the same reasoning Android's own
-    # "dark" default uses for *its* previous (forced) behavior -- each platform keeps looking the
-    # way it already did until someone opens Settings and picks something else.
-    "theme_mode": "system",
-}
+# The defaults of both apps are defined once, in nmea2log/app_settings.py (SettingsStore.kt gets them as a
+# generated Kotlin file); the comments on why a field is never defaulted are there too.
+DEFAULT_SFTP_PORT = app_settings.DEFAULT_SFTP_PORT
+DEFAULT_MIN_STOP_MINUTES = app_settings.DEFAULT_MIN_STOP_MINUTES
+
+_DEFAULTS: Dict[str, Any] = dict(app_settings.DEFAULTS)
 
 
 class SettingsStore:
@@ -113,7 +78,7 @@ class SettingsStore:
 
     @property
     def is_w2k2_config_complete(self) -> bool:
-        return bool(self.w2k2_user.strip()) and bool(self.w2k2_password.strip())
+        return app_settings.is_w2k2_complete(self.w2k2_user, self.w2k2_password)
 
     @property
     def auto_sync_on_launch(self) -> bool:
@@ -141,9 +106,7 @@ class SettingsStore:
 
     @property
     def is_rest_upload_config_complete(self) -> bool:
-        return bool(self.rest_upload_url.strip()) and bool(self.rest_upload_user.strip()) and bool(
-            self.rest_upload_password.strip()
-        )
+        return app_settings.is_rest_complete(self.rest_upload_url, self.rest_upload_user, self.rest_upload_password)
 
     @property
     def sftp_host(self) -> str:
@@ -171,11 +134,8 @@ class SettingsStore:
 
     @property
     def is_sftp_config_complete(self) -> bool:
-        return (
-            bool(self.sftp_host.strip())
-            and bool(self.sftp_user.strip())
-            and bool(self.sftp_password.strip())
-            and bool(self.sftp_remote_path.strip())
+        return app_settings.is_sftp_complete(
+            self.sftp_host, self.sftp_user, self.sftp_password, self.sftp_remote_path
         )
 
     @property

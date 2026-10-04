@@ -14,7 +14,7 @@ import toga
 from rubicon.objc import Block, CGPoint, NSObject, NSRange, ObjCClass, ObjCInstance, ObjCProtocol, objc_method
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
-from nmea2log import android_entry, import_ebl, run_outcome
+from nmea2log import android_entry, app_constants, import_ebl, run_outcome
 from nmea2log.upload import UploadError, normalize_rest_upload_url, upload_via_rest
 
 from .boot_mode_controller import BootModeController
@@ -28,17 +28,17 @@ _UIApplication = ObjCClass("UIApplication")
 # Only a guard against a service running for days: the log view appends lines to its text (see
 # MySailingLogbook.log()) instead of rebuilding it, so a long log costs memory, not time. When more than
 # _MAX_LOG_LINES are kept, the oldest are dropped down to _LOG_TRIM_TO; nmea2log.log has everything.
-_MAX_LOG_LINES = 200_000
-_LOG_TRIM_TO = 150_000
+_MAX_LOG_LINES = app_constants.LOG_MAX_LINES
+_LOG_TRIM_TO = app_constants.LOG_TRIM_TO
 
 # How many characters at the end of the log are laid out when scrolling to the end (see _lay_out_log()).
 _LOG_TAIL_LAYOUT_CHARS = 4000
 
 # How long log lines are collected before the log view is updated once -- see MySailingLogbook.log().
-_LOG_FLUSH_INTERVAL_S = 0.25
+_LOG_FLUSH_INTERVAL_S = app_constants.LOG_REFRESH_INTERVAL_MS / 1000
 
 # MainActivity.kt's own collapsed log height after a run (150dp), see _show_logbook_with_log_strip().
-_LOG_STRIP_HEIGHT = 150
+_LOG_STRIP_HEIGHT = app_constants.LOG_STRIP_HEIGHT
 
 _UIView = ObjCClass("UIView")
 _UIColor = ObjCClass("UIColor")
@@ -508,15 +508,15 @@ class MySailingLogbook(toga.App):
         (self.paths.data, see toga_iOS's own Paths.get_data_path()) so the files are reachable
         from the Files app / Finder over USB, the iOS equivalent of Android's own
         getExternalFilesDir() being USB-browsable."""
-        directory = self.paths.data / "Actisense"
+        directory = self.paths.data / app_constants.EBL_DIR_NAME
         directory.mkdir(parents=True, exist_ok=True)
         return directory
 
     def output_html_path(self) -> Path:
-        return self.paths.data / "logbook.html"
+        return self.paths.data / app_constants.LOGBOOK_FILE_NAME
 
     def sample_cache_path(self) -> Path:
-        return self.paths.data / "sample_cache.pkl"
+        return self.paths.data / app_constants.SAMPLE_CACHE_FILE_NAME
 
     def on_download(self, widget):
         if self._cancel_if_running(self.download_button):

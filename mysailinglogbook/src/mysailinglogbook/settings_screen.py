@@ -26,27 +26,19 @@ from rubicon.objc import Block, ObjCClass, UIEdgeInsetsMake, objc_id
 from toga.dialogs import ConfirmDialog, InfoDialog
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
+from nmea2log import app_settings
+
 from .settings_store import DEFAULT_MIN_STOP_MINUTES, DEFAULT_SFTP_PORT
 from .translations import t
 
 _NSNotificationCenter = ObjCClass("NSNotificationCenter")
 
-_BOOT_INTERVAL_MINUTES = [30, 60, 120, 180]
+_BOOT_INTERVAL_MINUTES = list(app_settings.BOOT_INTERVAL_CHOICES)
 _BOOT_INTERVAL_KEYS = ["boat_interval_30", "boat_interval_60", "boat_interval_120", "boat_interval_180"]
 
 
-def _int_or(text: str, default: int) -> int:
-    try:
-        return max(1, int(text))
-    except (TypeError, ValueError):
-        return default
-
-
 def _float_or(text: str, default: float) -> float:
-    try:
-        return float(text)
-    except (TypeError, ValueError):
-        return default
+    return app_settings.parse_float(text, default)
 
 
 class SettingsScreen:
@@ -475,10 +467,10 @@ class SettingsScreen:
             ],
             "boot_publish_every_round": self.boot_publish_every_round_switch.value,
             "boot_final_on_harbour": self.boot_final_harbour_switch.value,
-            "boot_harbour_stationary_minutes": _int_or(self.boot_harbour_stationary_field.value, 30),
-            "boot_harbour_engine_off_minutes": _int_or(self.boot_harbour_engine_off_field.value, 10),
+            "boot_harbour_stationary_minutes": app_settings.parse_int(self.boot_harbour_stationary_field.value, app_settings.DEFAULTS["boot_harbour_stationary_minutes"], app_settings.MINIMUM_MINUTES),
+            "boot_harbour_engine_off_minutes": app_settings.parse_int(self.boot_harbour_engine_off_field.value, app_settings.DEFAULTS["boot_harbour_engine_off_minutes"], app_settings.MINIMUM_MINUTES),
             "boot_final_on_left_boat": self.boot_final_left_switch.value,
-            "boot_left_boat_minutes": _int_or(self.boot_left_minutes_field.value, 20),
+            "boot_left_boat_minutes": app_settings.parse_int(self.boot_left_minutes_field.value, app_settings.DEFAULTS["boot_left_boat_minutes"], app_settings.MINIMUM_MINUTES),
             "boot_stop_after_final": self.boot_stop_after_final_switch.value,
             "boot_auto_start": self.boot_auto_start_switch.value,
             "theme_mode": {
@@ -510,7 +502,7 @@ class SettingsScreen:
                 rest_upload_user="",
                 rest_upload_password="",
                 sftp_host=self.sftp_host_field.value.strip(),
-                sftp_port=_int_or(self.sftp_port_field.value, DEFAULT_SFTP_PORT),
+                sftp_port=app_settings.parse_int(self.sftp_port_field.value, DEFAULT_SFTP_PORT, app_settings.MINIMUM_PORT),
                 sftp_user=self.sftp_user_field.value.strip(),
                 sftp_password=self.sftp_password_field.value,
                 sftp_remote_path=self.sftp_remote_path_field.value.strip(),

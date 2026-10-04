@@ -101,7 +101,7 @@ def test_is_sftp_config_complete_needs_all_four_fields(tmp_path):
 
 def test_theme_mode_defaults_to_system_and_persists(tmp_path):
     store = SettingsStore(tmp_path)
-    assert store.theme_mode == "system"  # unlike Android's own "dark" default, see _DEFAULTS
+    assert store.theme_mode == "system"  # the default of both apps, see nmea2log/app_settings.py
 
     store.update(theme_mode="dark")
     reloaded = SettingsStore(tmp_path)
