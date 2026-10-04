@@ -487,6 +487,10 @@ class MySailingLogbook(toga.App):
             self._scroll_log_to_bottom()
         else:
             native.contentOffset = offset
+        # The scroll indicator fades after a moment, and it is the handle that can be touched and dragged to
+        # get to the first line of a long log at once (Android's fast-scroll handle): keep it showing
+        # while the log is growing.
+        native.flashScrollIndicators()
 
     def _lay_out_log(self) -> None:
         """UIKit lays a UITextView's text out lazily, so right after the text changes its contentSize
