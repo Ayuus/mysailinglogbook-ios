@@ -22,7 +22,7 @@ comparison identifier (t() is deterministic per process, so this is safe).
 from __future__ import annotations
 
 import toga
-from rubicon.objc import Block, ObjCClass, UIEdgeInsetsMake, objc_id
+from rubicon.objc import SEL, Block, CGPoint, CGRect, CGSize, NSObject, ObjCClass, UIEdgeInsetsMake, objc_id, objc_method, objc_property
 from toga.dialogs import ConfirmDialog, InfoDialog
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
@@ -33,6 +33,25 @@ from .translations import t
 
 _NSNotificationCenter = ObjCClass("NSNotificationCenter")
 _NSString = ObjCClass("NSString")
+_UIToolbar = ObjCClass("UIToolbar")
+_UIBarButtonItem = ObjCClass("UIBarButtonItem")
+
+# UIBarButtonSystemItem raw values (not exposed as named constants in toga_iOS / rubicon-objc): .done and
+# .flexibleSpace.
+_BAR_BUTTON_DONE = 0
+_BAR_BUTTON_FLEXIBLE_SPACE = 5
+# A choice in a picker closes it this long after the last change (a wheel reports every row it settles on).
+_PICKER_CLOSE_DELAY_S = 1.2
+
+
+class _PickerDoneTarget(NSObject):
+    """The target of the "Gereed" button above a picker: ends the editing of the field that shows it."""
+
+    field = objc_property(object, weak=True)
+
+    @objc_method
+    def done_(self, sender) -> None:
+        self.field.resignFirstResponder()
 
 # What the form leaves free on each side of the screen (Pack margin=16 on the form box).
 _FORM_MARGIN = 16
@@ -126,6 +145,7 @@ class SettingsScreen:
         else:
             self.publish_method_selection.value = self._publish_none
         self.publish_method_selection.on_change = self._update_publish_method_visibility
+        self._closing_picker(self.publish_method_selection)
         form.add(self.publish_method_selection)
 
         self.wordpress_box = toga.Box(style=Pack(direction=COLUMN))
@@ -173,7 +193,7 @@ class SettingsScreen:
 
         self._section_header(form, t("section_boat_mode"))
         form.add(self._wrapped_label(t("label_boat_interval"), style=Pack(margin_top=8)))
-        self.boot_interval_selection = toga.Selection(items=boot_interval_labels)
+        self.boot_interval_selection = self._closing_picker(toga.Selection(items=boot_interval_labels))
         try:
             index = _BOOT_INTERVAL_MINUTES.index(self.store.boot_round_interval_minutes)
         except ValueError:
@@ -222,7 +242,7 @@ class SettingsScreen:
         self._theme_dark = t("radio_theme_dark")
         self._theme_system = t("radio_theme_system")
         theme_options = [self._theme_light, self._theme_dark, self._theme_system]
-        self.theme_selection = toga.Selection(items=theme_options, style=Pack(margin_top=8))
+        self.theme_selection = self._closing_picker(toga.Selection(items=theme_options, style=Pack(margin_top=8)))
         self.theme_selection.value = {
             "light": self._theme_light,
             "dark": self._theme_dark,
@@ -273,6 +293,33 @@ class SettingsScreen:
 
     # -- small widget-building helpers, same role as SettingsActivity.kt's own field()/
     # sectionHeader()/checkbox() local functions --
+
+    def _closing_picker(self, selection):
+        """Makes the picker of a toga.Selection (a wheel in place of the keyboard) go away by itself: a "Gereed"
+        button above it, and closing a moment after a choice. Before, it stayed up until the user tapped
+        elsewhere and covered the Annuleren / Opslaan buttons below the form. Returns the selection."""
+        field = selection._impl.native
+        target = _PickerDoneTarget.alloc().init()
+        target.field = field
+        selection._done_target = target  # the bar button does not retain its target
+        done = _UIBarButtonItem.alloc().initWithBarButtonSystemItem(_BAR_BUTTON_DONE, target=target, action=SEL("done:"))
+        space = _UIBarButtonItem.alloc().initWithBarButtonSystemItem(_BAR_BUTTON_FLEXIBLE_SPACE, target=None, action=None)
+        toolbar = _UIToolbar.alloc().initWithFrame(CGRect(CGPoint(0, 0), CGSize(0, 44)))
+        toolbar.setItems([space, done])
+        field.inputAccessoryView = toolbar
+
+        previous = selection.on_change
+        pending = {"handle": None}
+
+        def _on_change(widget, **kwargs) -> None:
+            if previous is not None:
+                previous(widget)
+            if pending["handle"] is not None:
+                pending["handle"].cancel()
+            pending["handle"] = self.app.loop.call_later(_PICKER_CLOSE_DELAY_S, field.resignFirstResponder)
+
+        selection.on_change = _on_change
+        return selection
 
     def _wrapped_label(self, text, reserved=0, style=None):
         """A Label whose text is broken into lines that fit the screen: ``reserved`` is the width a control
