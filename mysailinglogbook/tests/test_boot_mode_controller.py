@@ -7,6 +7,7 @@ not duplicated here."""
 
 from nmea2log.bootmode import BoatSnapshot, RoundFailed, RoundNotFound, RoundOk
 
+from mysailinglogbook import translations
 from mysailinglogbook.boot_mode_controller import format_status, round_outcome_from_result
 
 
@@ -69,12 +70,17 @@ def test_format_status_returns_none_for_an_unknown_kind():
     assert format_status("SOME_FUTURE_STATUS", None) is None
 
 
-def test_format_status_with_no_time_returns_the_plain_line():
+# The expected texts are English; translations picks the language of the device the tests run on.
+def test_format_status_with_no_time_returns_the_plain_line(monkeypatch):
+    monkeypatch.setattr(translations, "_LANGUAGE", "en")
+
     assert format_status("SEARCHING", None) == "Boat mode: looking for the W2K-2..."
 
 
-def test_format_status_substitutes_a_formatted_time_when_given_one():
+def test_format_status_substitutes_a_formatted_time_when_given_one(monkeypatch):
     import time
+
+    monkeypatch.setattr(translations, "_LANGUAGE", "en")
 
     # A fixed, known local time (2026-09-27 14:05 local) expressed as epoch milliseconds, so the
     # test doesn't depend on the machine's own timezone doing anything unexpected -- built the
