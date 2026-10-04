@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 import toga
-from rubicon.objc import Block, CGPoint, NSObject, ObjCClass, ObjCInstance, ObjCProtocol, objc_method
+from rubicon.objc import Block, CGPoint, NSObject, NSRange, ObjCClass, ObjCInstance, ObjCProtocol, objc_method
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
 from nmea2log import android_entry, import_ebl
@@ -25,8 +25,14 @@ from .translations import t
 
 _UIApplication = ObjCClass("UIApplication")
 
-# See MySailingLogbook._trim_log_if_needed()'s own doc comment for why this exists at all.
-_MAX_LOG_LINES = 1000
+# Only a guard against a service running for days: the log view appends lines to its text (see
+# MySailingLogbook.log()) instead of rebuilding it, so a long log costs memory, not time. When more than
+# _MAX_LOG_LINES are kept, the oldest are dropped down to _LOG_TRIM_TO; nmea2log.log has everything.
+_MAX_LOG_LINES = 200_000
+_LOG_TRIM_TO = 150_000
+
+# How many characters at the end of the log are laid out when scrolling to the end (see _lay_out_log()).
+_LOG_TAIL_LAYOUT_CHARS = 4000
 
 # How long log lines are collected before the log view is updated once -- see MySailingLogbook.log().
 _LOG_FLUSH_INTERVAL_S = 0.25
@@ -293,6 +299,10 @@ class MySailingLogbook(toga.App):
         # The log's lines live here, not only in the UITextView: log() appends to this list and a
         # short timer pushes it to the view once (see log()/_flush_log()).
         self._log_lines = []
+        # How many of _log_lines are in the view's text already, and whether the text has to be rebuilt
+        # from scratch (lines were dropped from the front) instead of only appended to.
+        self._log_shown = 0
+        self._log_rebuild = False
         self._log_flush_scheduled = False
         # Both children stay in content_area permanently -- _show_log_content()/
         # _show_logbook_content() toggle which one is visible (display+visibility, same
@@ -439,16 +449,16 @@ class MySailingLogbook(toga.App):
 
     def log(self, line: str) -> None:
         """Adds a line to the log. The view itself is only updated by _flush_log(), at most every
-        _LOG_FLUSH_INTERVAL_S: found in practice (an import of 2326 files, one line each, then the
-        decode progress after it), setting the whole UITextView text on every line -- plus reading it
-        back and splitting it to trim -- kept the main thread so busy the log could not be scrolled
-        at all, and the scroll-to-bottom after each set ran before UIKit had laid the new text out, so
-        it never reached the end. Trimmed to _MAX_LOG_LINES (once past double that): the full history
-        is already persisted to nmea2log.log on disk (see android_entry.py's set_log_file()); this
-        only trims what is kept in memory/on screen."""
+        _LOG_FLUSH_INTERVAL_S, and then only the lines gained since the last flush are appended to the
+        text: found in practice (an import of 2326 files, one line each, then the decode progress after
+        it), setting the whole UITextView text on every line kept the main thread so busy the log could
+        not be scrolled at all. The full history stays available (up to _MAX_LOG_LINES) and is also in
+        nmea2log.log on disk (see android_entry.py's set_log_file())."""
         self._log_lines.append(line)
-        if len(self._log_lines) > _MAX_LOG_LINES * 2:
-            del self._log_lines[:-_MAX_LOG_LINES]
+        if len(self._log_lines) > _MAX_LOG_LINES:
+            del self._log_lines[:-_LOG_TRIM_TO]
+            self._log_shown = 0
+            self._log_rebuild = True
         if not self._log_flush_scheduled:
             self._log_flush_scheduled = True
             self.loop.call_later(_LOG_FLUSH_INTERVAL_S, self._flush_log)
@@ -462,8 +472,17 @@ class MySailingLogbook(toga.App):
         native = self.log_view._impl.native
         was_at_bottom = self._log_is_scrolled_to_bottom()
         offset = native.contentOffset
-        self.log_view.value = "\n".join(self._log_lines) + "\n"
-        self._lay_out_log()
+        storage = native.textStorage
+        if self._log_rebuild or self._log_shown == 0 or storage.length() == 0:
+            # The first lines (set through toga so the text gets the widget's font and colour), or
+            # after lines were dropped from the front.
+            self.log_view.value = "\n".join(self._log_lines) + "\n"
+            self._log_rebuild = False
+        elif self._log_shown < len(self._log_lines):
+            # Appended to the existing text, which keeps the font and colour of the text before it.
+            added = "\n".join(self._log_lines[self._log_shown:]) + "\n"
+            storage.replaceCharactersInRange(NSRange(storage.length(), 0), withString=added)
+        self._log_shown = len(self._log_lines)
         if was_at_bottom:
             self._scroll_log_to_bottom()
         else:
@@ -472,9 +491,12 @@ class MySailingLogbook(toga.App):
     def _lay_out_log(self) -> None:
         """UIKit lays a UITextView's text out lazily, so right after the text changes its contentSize
         is still the old one -- which is what made both the was-at-bottom check and the scroll to the
-        end come out wrong. Forces the layout now."""
+        end come out wrong. Forces the layout of the end of the text now: only that, not the whole log,
+        so it costs the same however long the log is."""
         native = self.log_view._impl.native
-        native.layoutManager.ensureLayoutForTextContainer(native.textContainer)
+        length = native.textStorage.length()
+        start = max(length - _LOG_TAIL_LAYOUT_CHARS, 0)
+        native.layoutManager.ensureLayoutForCharacterRange(NSRange(start, length - start))
         native.layoutIfNeeded()
 
     def _scroll_log_to_bottom(self) -> None:
