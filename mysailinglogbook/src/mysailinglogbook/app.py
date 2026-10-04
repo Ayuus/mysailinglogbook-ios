@@ -1048,25 +1048,11 @@ class MySailingLogbook(toga.App):
             result = import_ebl.import_staged_ebl_files(
                 [str(p) for p in source_files], str(self.ebl_dir()), report_progress
             )
-            # A same name that turned out to hold different content (a reformatted SD card
-            # reusing an EBLnnnnnn folder, or two unrelated loose files sharing a name) -- see
-            # import_ebl.py's own doc comment. Nothing was lost (both are kept, under different
-            # names), but it's worth flagging more than a plain import, hence [warning] rather
-            # than [info] (asked for explicitly).
-            for detail in result["renamed"]:
-                self.loop.call_soon_threadsafe(self.log, "[warning] " + t("log_import_renamed", detail=detail))
-            for detail in result["errors"]:
-                self.loop.call_soon_threadsafe(self.log, "[warning] " + t("log_import_file_error", detail=detail))
+            # What the end of the import says (renamed and failed files as warnings, then one summary line) is
+            # decided in nmea2log/run_outcome.py, shared with the Android app.
+            for line in run_outcome.describe_import(result):
+                self.loop.call_soon_threadsafe(self.log, self._outcome_line_text(line))
             imported = result["imported"]
-            skipped = result["skipped_duplicate"]
-            if imported > 0:
-                self.loop.call_soon_threadsafe(self.log, t("log_import_done", imported=imported, skipped=skipped))
-            elif skipped > 0:
-                self.loop.call_soon_threadsafe(
-                    self.log, "[info] " + t("log_import_all_duplicates", count=skipped)
-                )
-            else:
-                self.loop.call_soon_threadsafe(self.log, "[info] " + t("log_import_no_files"))
             if imported > 0:
                 self._run_build_from_local_files()
         except OSError:
@@ -1170,7 +1156,7 @@ class MySailingLogbook(toga.App):
             if "error" in params and params["error"] is None:
                 params["error"] = t("error_unknown")
             text = t(line.key, **params)
-        return f"[{line.level}] {text}"
+        return f"[{line.level}] {text}" if line.level else text
 
 
 def main():
