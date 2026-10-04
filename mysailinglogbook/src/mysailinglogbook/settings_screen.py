@@ -32,6 +32,37 @@ from .settings_store import DEFAULT_MIN_STOP_MINUTES, DEFAULT_SFTP_PORT
 from .translations import t
 
 _NSNotificationCenter = ObjCClass("NSNotificationCenter")
+_NSString = ObjCClass("NSString")
+
+# What the form leaves free on each side of the screen (Pack margin=16 on the form box).
+_FORM_MARGIN = 16
+# A Switch with no text of its own: the control (~51pt) plus the stack's spacing (10) -- see toga_iOS Switch.
+_SWITCH_WIDTH = 61
+# The "Clear" button of a cache row plus the gap before it.
+_CACHE_BUTTON_WIDTH = 72 + 8
+
+
+def _text_width(text: str, font) -> float:
+    """How wide iOS draws ``text`` in ``font``, on one line."""
+    return float(_NSString.stringWithString(text).sizeWithAttributes({"NSFont": font}).width)
+
+
+def _wrap_to_width(text: str, font, max_width: float) -> str:
+    """``text`` with line breaks added between words so no line is wider than ``max_width``. Toga's iOS Label
+    never word-wraps (it clips: a long label ran off the right edge of an iPhone 12), but it does show the
+    lines of a text with newlines in it."""
+    lines = []
+    for paragraph in text.split("\n"):
+        current = ""
+        for word in paragraph.split(" "):
+            candidate = word if not current else current + " " + word
+            if current and _text_width(candidate, font) > max_width:
+                lines.append(current)
+                current = word
+            else:
+                current = candidate
+        lines.append(current)
+    return "\n".join(lines)
 
 _BOOT_INTERVAL_MINUTES = list(app_settings.BOOT_INTERVAL_CHOICES)
 _BOOT_INTERVAL_KEYS = ["boat_interval_30", "boat_interval_60", "boat_interval_120", "boat_interval_180"]
@@ -140,7 +171,7 @@ class SettingsScreen:
         form.add(self.sftp_box)
 
         self._section_header(form, t("section_boat_mode"))
-        form.add(toga.Label(t("label_boat_interval"), style=Pack(margin_top=8)))
+        form.add(self._wrapped_label(t("label_boat_interval"), style=Pack(margin_top=8)))
         self.boot_interval_selection = toga.Selection(items=boot_interval_labels)
         try:
             index = _BOOT_INTERVAL_MINUTES.index(self.store.boot_round_interval_minutes)
@@ -242,8 +273,17 @@ class SettingsScreen:
     # -- small widget-building helpers, same role as SettingsActivity.kt's own field()/
     # sectionHeader()/checkbox() local functions --
 
+    def _wrapped_label(self, text, reserved=0, style=None):
+        """A Label whose text is broken into lines that fit the screen: ``reserved`` is the width a control
+        next to it takes."""
+        label = toga.Label(text, style=style)
+        window_width = float(self.app.main_window._impl.native.bounds.size.width)
+        available = window_width - 2 * _FORM_MARGIN - reserved
+        label.text = _wrap_to_width(text, label._impl.native.font, available)
+        return label
+
     def _field(self, container, label, initial_value, is_password=False, placeholder=None, disable_autofill=False):
-        container.add(toga.Label(label, style=Pack(margin_top=8)))
+        container.add(self._wrapped_label(label, style=Pack(margin_top=8)))
         widget_cls = toga.PasswordInput if is_password else toga.TextInput
         field = widget_cls(value=initial_value, placeholder=placeholder)
         # Every field here is a technical value (URL, host, username, credential) or a short
@@ -292,23 +332,23 @@ class SettingsScreen:
         container.add(switch)
 
     def _switch(self, container, label, initial_value):
-        """toga.Switch's own text setter (toga/widgets/switch.py, toga-core -- not a toga_iOS
-        backend detail) is hardcoded to `value.split("\\n")[0]`, documented as "Only one line of
-        text can be displayed. Any content after the first newline will be ignored." -- true on
-        every platform, not an iOS quirk, and not fixable from a backend at all: confirmed in
-        practice the hard way, a whole chain of iOS-backend attempts (numberOfLines,
-        preferredMaxLayoutWidth, monkeypatched rehint() measuring via sizeThatFits or
-        textRectForBounds, with and without ceil() rounding) all failed identically, because a
-        debug print showed the label's own text already truncated to one line before rehint()
-        ever ran -- well upstream of anything a backend patch could reach. So: every switch
-        label here is kept short enough to actually fit on one line (see translations.py's own
-        checkbox_boat_stop_after_final/checkbox_boat_auto_start for the two that needed
-        shortening for exactly this reason) rather than fighting a restriction toga.Switch
-        itself imposes.
-        """
-        switch = toga.Switch(label, value=initial_value, style=Pack(margin_top=8))
-        container.add(switch)
+        """A text on the left and a Switch on the right. toga.Switch shows only the first line of its own text
+        (toga-core's setter keeps ``value.split("\\n")[0]``) and a long one pushes the control off the edge of
+        a narrower iPhone, so the text is a separate Label, wrapped to fit, in a row with a Switch that has
+        none; the label dims with the switch (see _set_switch_enabled())."""
+        row = toga.Box(style=Pack(direction=ROW, margin_top=8, align_items="center"))
+        text = self._wrapped_label(label, reserved=_SWITCH_WIDTH, style=Pack(flex=1))
+        switch = toga.Switch("", value=initial_value)
+        row.add(text)
+        row.add(switch)
+        container.add(row)
+        switch._row_label = text
         return switch
+
+    @staticmethod
+    def _set_switch_enabled(switch, enabled: bool) -> None:
+        switch.enabled = enabled
+        switch._row_label._impl.native.enabled = enabled
 
     def _section_header(self, container, text):
         container.add(toga.Label(text, style=Pack(margin_top=20, font_weight="bold", font_size=19)))
@@ -325,7 +365,7 @@ class SettingsScreen:
         in for the boolean Switch there.
         """
         row = toga.Box(style=Pack(direction=ROW, margin_top=8))
-        row.add(toga.Label(label_text, style=Pack(flex=1)))
+        row.add(self._wrapped_label(label_text, reserved=_CACHE_BUTTON_WIDTH, style=Pack(flex=1)))
         # width/height close to a native UISwitch's own ~51x31pt footprint -- asked for
         # explicitly ("zelfde als schuifjes"): matches the control every other row in this
         # section ends its own row with, rather than either the button's default tiny
@@ -409,8 +449,8 @@ class SettingsScreen:
         # Same reasoning for both: neither means anything with no publish method chosen -- found
         # in practice, left enabled with "Niet publiceren" picked, they read as real, live
         # settings despite doing nothing at all in that state.
-        self.boot_publish_every_round_switch.enabled = show_wordpress or show_sftp
-        self.auto_publish_switch.enabled = show_wordpress or show_sftp
+        self._set_switch_enabled(self.boot_publish_every_round_switch, show_wordpress or show_sftp)
+        self._set_switch_enabled(self.auto_publish_switch, show_wordpress or show_sftp)
 
     async def _on_clear_data_cache(self, widget):
         confirmed = await self.app.main_window.dialog(
