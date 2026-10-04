@@ -119,13 +119,6 @@ _STRINGS = {
         "fr": "Annulé.",
         "de": "Abgebrochen.",
     },
-    "log_downloading": {
-        # {current}/{total}/{file_name} substituted at call time.
-        "en": "Downloading: {current}/{total} ({file_name})",
-        "nl": "Downloaden: {current}/{total} ({file_name})",
-        "fr": "Téléchargement : {current}/{total} ({file_name})",
-        "de": "Herunterladen: {current}/{total} ({file_name})",
-    },
 }
 
 # The texts both apps show come from nmea2log (app_texts.py), the single source for them: a wording is

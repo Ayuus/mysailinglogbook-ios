@@ -180,9 +180,8 @@ class ProgressCallback:
         self.cancel_event = cancel_event
 
     def report(self, current, total, file_name):
-        self.app.loop.call_soon_threadsafe(
-            self.app.log, "[info] " + t("log_downloading", current=current, total=total, file_name=file_name)
-        )
+        # Only the progress bar, no log line per file: a first full download is thousands of files
+        # (MainActivity.kt's own report() leaves them out for the same reason).
         self.app.loop.call_soon_threadsafe(self.app.update_progress_bar, t("phase_downloading"), current, total)
 
     def isCancelled(self):

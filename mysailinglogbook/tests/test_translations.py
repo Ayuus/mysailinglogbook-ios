@@ -44,10 +44,10 @@ def test_t_returns_the_current_languages_text_for_a_plain_key():
 
 
 def test_t_substitutes_placeholders():
-    rendered = t("log_downloading", current=3, total=10, file_name="000021_003.ebl")
+    rendered = t("progress_label_format", phase="Decoderen", current=3, total=10)
 
     # The actual values must appear, and no literal "{placeholder}" should survive.
-    assert "3" in rendered and "10" in rendered and "000021_003.ebl" in rendered
+    assert "Decoderen" in rendered and "3" in rendered and "10" in rendered
     assert "{" not in rendered
 
 
