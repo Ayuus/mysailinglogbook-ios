@@ -357,6 +357,7 @@ class MySailingLogbook(toga.App):
         self.sync_in_progress = False
         self.cancel_event = threading.Event()
         self._busy_button = None
+        self._run_initiator = "build"
 
         # "Boot-modus starten bij openen" (Settings) -- mirrors MainActivity.kt's own
         # shouldAutoStartBootMode(), called from onCreate(). Found in practice: this setting
@@ -539,6 +540,8 @@ class MySailingLogbook(toga.App):
         return self.paths.data / "sample_cache.pkl"
 
     def on_download(self, widget):
+        if self._cancel_if_running(self.download_button):
+            return
         # Every early return below switches away from a currently-shown logbook first, same as
         # _start_background()'s own matching reset for the success path just below (asked for
         # explicitly, matching MainActivity.kt's own runSync()/runPublish() fix, "check ook bij
@@ -606,6 +609,8 @@ class MySailingLogbook(toga.App):
         self._start_background(self._run_import, url, busy_button=self.import_button)
 
     def on_build(self, widget):
+        if self._cancel_if_running(self.build_button):
+            return
         if self.logbook_shown_as_run_result:
             # Asked for explicitly (Android's buildButton does the same): with a run's own result
             # showing next to a strip of the log, this tap only brings the log back -- a run takes
@@ -628,6 +633,8 @@ class MySailingLogbook(toga.App):
         self._start_background(self._run_build_from_local_files, busy_button=self.build_button)
 
     def on_publish(self, widget):
+        if self._cancel_if_running(self.publish_button):
+            return
         # Same sequence as MainActivity.kt's own runPublish()/buildFromLocalFilesAndMaybePublish():
         # always rebuilds fresh from local .ebl data first (not just "upload whatever HTML happens
         # to already be on disk"), then always publishes regardless of auto_publish_after_build --
@@ -808,7 +815,9 @@ class MySailingLogbook(toga.App):
         (same reasoning as report() elsewhere in this file) -- never call this directly from a
         background thread.
         """
-        if total <= 0:
+        if total <= 0 or self.cancel_event.is_set():
+            # Nothing to show yet, or the run was cancelled and its last updates must not bring the
+            # bar back.
             self.hide_progress_bar()
             return
         self.progress_label.style.display = "pack"
@@ -895,6 +904,7 @@ class MySailingLogbook(toga.App):
         self.sync_in_progress = True
         self.cancel_event.clear()
         self._busy_button = busy_button
+        self._run_initiator = "download" if busy_button is self.download_button else "build"
         self._set_toolbar_enabled(False)
         # Same reset as MainActivity.kt's own buildFromLocalFilesAndMaybePublish()/runSync()
         # (showingLocalLogbook = false at the start of every run) -- found in practice, missing
@@ -911,6 +921,25 @@ class MySailingLogbook(toga.App):
             # deliberately stays enabled too (tapping it again cancels, see _cancel_if_running()).
             _set_busy_pulse(busy_button, True)
         threading.Thread(target=self._run_and_finish, args=(target, args), daemon=True).start()
+
+    def _cancel_if_running(self, button) -> bool:
+        """Tapping the button that started the running download / assemble / publish cancels it, as on
+        Android (MainActivity.cancelSyncStayInApp()): the button is the one pulsing, and stays enabled
+        for this. True when the tap was a cancel and nothing else is to be done."""
+        if not (self.sync_in_progress and self._busy_button is button):
+            return False
+        self.cancel_event.set()
+        text = t("status_sync_cancelled" if self._run_initiator == "download" else "status_build_cancelled")
+        self.log("[info] " + text)
+        self.hide_progress_bar()
+        # The run only notices the flag between steps (before each file, or when a long trip-cache load
+        # ends), so say so if it takes a while: nothing else would appear in the log until it stops.
+        self.loop.call_later(3, self._log_still_stopping)
+        return True
+
+    def _log_still_stopping(self) -> None:
+        if self.sync_in_progress and self.cancel_event.is_set():
+            self.log("[info] " + t("status_cancel_still_stopping"))
 
     def _run_and_finish(self, target, args) -> None:
         try:
