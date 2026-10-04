@@ -347,6 +347,7 @@ class MySailingLogbook(toga.App):
         self.cancel_event = threading.Event()
         self._busy_button = None
         self._run_initiator = "build"
+        self.update_publish_button_enabled()
 
         # "Boot-modus starten bij openen" (Settings) -- mirrors MainActivity.kt's own
         # shouldAutoStartBootMode(), called from onCreate(). Found in practice: this setting
@@ -921,6 +922,7 @@ class MySailingLogbook(toga.App):
 
     def show_main_screen(self) -> None:
         self.main_window.content = self.main_content
+        self.update_publish_button_enabled()
 
     def _start_background(self, target, *args, busy_button=None) -> None:
         self.sync_in_progress = True
@@ -981,6 +983,21 @@ class MySailingLogbook(toga.App):
             _set_busy_pulse(self._busy_button, False)
             self._busy_button = None
 
+    def _publish_configured(self) -> bool:
+        store = self.settings_store
+        return store.is_rest_upload_config_complete or store.is_sftp_config_complete
+
+    def update_publish_button_enabled(self) -> None:
+        """Publish is only usable once WordPress or SFTP is filled in (MainActivity.updatePublishButtonEnabled()):
+        called at start and when Settings was saved. The log says so once, when the button has just become
+        unusable, instead of the button silently looking broken."""
+        configured = self._publish_configured()
+        was_enabled = self.publish_button.enabled
+        if not self.sync_in_progress:
+            self.publish_button.enabled = configured
+            if not configured and was_enabled:
+                self.log("[info] " + t("log_publish_not_configured"))
+
     def _set_toolbar_enabled(self, enabled: bool) -> None:
         # settings_button and view_button are left out deliberately, matching MainActivity.kt:
         # Settings is its own screen, unaffected by a sync/build in progress; viewLocalLogbook()
@@ -997,7 +1014,9 @@ class MySailingLogbook(toga.App):
         ):
             if button is self._busy_button:
                 continue
-            button.enabled = enabled
+            # Publish only makes sense once a destination is filled in (MainActivity's
+            # updatePublishButtonEnabled()); Assemble covers building without one.
+            button.enabled = enabled and (button is not self.publish_button or self._publish_configured())
 
     # Runs on the background thread started by _start_background() -- see the comment above
     # _run_build_from_local_files(). Reached from on_folder_picked() via _start_background().

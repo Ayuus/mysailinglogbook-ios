@@ -113,7 +113,7 @@ class SettingsScreen:
             self.wordpress_box,
             t("label_rest_upload_url"),
             self.store.rest_upload_url,
-            placeholder="your-site.example",
+            placeholder=t("hint_rest_upload_url"),
             disable_autofill=True,
         )
         self.rest_user_field = self._field(
@@ -525,3 +525,5 @@ class SettingsScreen:
         self.app.apply_theme_mode()
         self._remove_keyboard_avoidance()
         self.app.show_main_screen()
+        # Android shows a toast; the log is the nearest thing here.
+        self.app.log("[info] " + t("toast_settings_saved"))
