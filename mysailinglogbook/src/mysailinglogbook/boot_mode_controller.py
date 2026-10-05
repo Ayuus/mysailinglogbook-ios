@@ -135,7 +135,7 @@ class BootModeController:
             final_on_left_boat=store.boot_final_on_left_boat,
             left_boat_minutes=store.boot_left_boat_minutes,
             stop_after_final=store.boot_stop_after_final,
-            publish_configured=store.is_rest_upload_config_complete or store.is_sftp_config_complete,
+            publish_configured=store.is_rest_upload_config_complete,
         )
 
     def start(self) -> None:
@@ -342,9 +342,7 @@ class BootModeController:
 
     def _run_publish(self) -> None:
         # Reuses the exact same publish path the Publish toolbar button itself uses (REST
-        # preferred over SFTP, SFTP shows the "not supported on iOS" error -- see app.py's own
-        # _publish_logbook() doc comment) rather than a separate implementation of the same
-        # REST-vs-SFTP choice.
+        # see app.py's own _publish_logbook() doc comment) rather than a separate implementation.
         self.busy = True
         try:
             ok = self.app._publish_logbook()

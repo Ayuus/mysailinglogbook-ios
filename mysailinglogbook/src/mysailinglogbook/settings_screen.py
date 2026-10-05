@@ -8,7 +8,7 @@ uses on Android (and will use here too once it's ported) -- see MySailingLogbook
 show_settings_screen()/show_main_screen().
 
 Also unlike Android: no RadioGroup/Spinner widgets exist on Toga, so the publish-method choice
-(don't publish / WordPress / SFTP) and the boat-mode round interval use toga.Selection (an iOS
+(don't publish / WordPress) and the boat-mode round interval use toga.Selection (an iOS
 picker) instead -- same three/four choices, same behavior (only the picked publish method's own
 fields are shown, and saved; the others are cleared), just a native iOS-idiomatic control instead
 of Android's radio buttons/dropdown.
@@ -25,16 +25,17 @@ import toga
 from toga.dialogs import ConfirmDialog, InfoDialog
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
-from nmea2log import app_settings
+from nmea2log import app_settings, ebl_storage
 
 from . import native_ui
-from .settings_store import DEFAULT_MIN_STOP_MINUTES, DEFAULT_SFTP_PORT
+from .settings_store import DEFAULT_MIN_STOP_MINUTES
 from .translations import t
 
 # What the form leaves free on each side of the screen (Pack margin=16 on the form box).
 _FORM_MARGIN = 16
 # The "Clear" button of a cache row plus the gap before it, and the same room to spare.
 _CACHE_BUTTON_WIDTH = 72 + 8 + 16
+_DELETE_BUTTON_WIDTH = 112 + 8 + 16
 
 
 _BOOT_INTERVAL_MINUTES = list(app_settings.BOOT_INTERVAL_CHOICES)
@@ -54,8 +55,7 @@ class SettingsScreen:
         # own doc comment on why the display text doubles as the comparison identifier.
         self._publish_none = t("radio_publish_none")
         self._publish_wordpress = t("radio_publish_wordpress")
-        self._publish_sftp = t("radio_publish_sftp")
-        publish_options = [self._publish_none, self._publish_wordpress, self._publish_sftp]
+        publish_options = [self._publish_none, self._publish_wordpress]
         boot_interval_labels = [t(key) for key in _BOOT_INTERVAL_KEYS]
 
         # A plain vertical Box (not yet in a ScrollContainer -- that wraps it below), same
@@ -93,8 +93,6 @@ class SettingsScreen:
         self.publish_method_selection = toga.Selection(items=publish_options, style=Pack(margin_top=8))
         if self.store.is_rest_upload_config_complete:
             self.publish_method_selection.value = self._publish_wordpress
-        elif self.store.is_sftp_config_complete:
-            self.publish_method_selection.value = self._publish_sftp
         else:
             self.publish_method_selection.value = self._publish_none
         self.publish_method_selection.on_change = self._update_publish_method_visibility
@@ -129,20 +127,6 @@ class SettingsScreen:
         )
         form.add(self.wordpress_box)
 
-        self.sftp_box = toga.Box(style=Pack(direction=COLUMN))
-        self.sftp_host_field = self._field(self.sftp_box, t("label_sftp_host"), self.store.sftp_host)
-        self.sftp_port_field = self._field(self.sftp_box, t("label_sftp_port"), str(self.store.sftp_port))
-        self.sftp_user_field = self._field(self.sftp_box, t("label_sftp_user"), self.store.sftp_user)
-        self.sftp_password_field = self._field(
-            self.sftp_box, t("label_sftp_password"), self.store.sftp_password, is_password=True
-        )
-        self.sftp_remote_path_field = self._field(
-            self.sftp_box, t("label_sftp_remote_path"), self.store.sftp_remote_path
-        )
-        self.sftp_host_key_field = self._field(
-            self.sftp_box, t("label_sftp_host_key_fingerprint"), self.store.sftp_host_key_fingerprint
-        )
-        form.add(self.sftp_box)
 
         self._section_header(form, t("section_boat_mode"))
         form.add(self._wrapped_label(t("label_boat_interval"), style=Pack(margin_top=8)))
@@ -216,6 +200,13 @@ class SettingsScreen:
         self._cache_row(form, t("button_cache_data"), self._on_clear_data_cache)
         self._cache_row(form, t("button_cache_places"), self._on_clear_places_cache)
 
+        # The raw .ebl files themselves (the caches above never touch them), for freeing the phone's
+        # storage -- counted and deleted by nmea2log.ebl_storage, the same code the Android app uses.
+        self._section_header(form, t("section_ebl_files"))
+        self._cache_row(
+            form, t("button_ebl_files"), self._on_delete_ebl_files, button_text=t("button_delete"), button_width=112
+        )
+
         # horizontal=False -- found in practice, asked for explicitly to fix: toga_iOS's own
         # ScrollContainer.content_refreshed() lets the document container grow wider than the
         # viewport whenever horizontal scrolling is allowed (its own default), and does so purely
@@ -279,20 +270,22 @@ class SettingsScreen:
     def _section_header(self, container, text):
         container.add(toga.Label(text, style=Pack(margin_top=20, font_weight="bold", font_size=19)))
 
-    def _cache_row(self, container, label_text, on_press):
+    def _cache_row(self, container, label_text, on_press, button_text=None, button_width=72):
         """A single cache-clear row: descriptive Label on the left (flex=1, same as any other
         Label here), a small "Clear" toga.Button on the right sized to its own text -- same
         left-label/right-control shape as _switch(), just with a tap-to-confirm Button standing
         in for the boolean Switch there.
         """
         row = toga.Box(style=Pack(direction=ROW, margin_top=8))
-        row.add(self._wrapped_label(label_text, reserved=_CACHE_BUTTON_WIDTH, style=Pack(flex=1)))
+        row.add(self._wrapped_label(label_text, reserved=button_width + 8 + 16, style=Pack(flex=1)))
         # width/height close to a native UISwitch's own ~51x31pt footprint -- asked for
         # explicitly ("zelfde als schuifjes"): matches the control every other row in this
         # section ends its own row with, rather than either the button's default tiny
         # sized-to-text self, or an arbitrarily bigger one.
         button = toga.Button(
-            t("button_clear"), on_press=on_press, style=Pack(width=72, height=32, background_color="#E5E5EA")
+            button_text or t("button_clear"),
+            on_press=on_press,
+            style=Pack(width=button_width, height=32, background_color="#E5E5EA"),
         )
         native_ui.round_corners(button)
         row.add(button)
@@ -314,18 +307,14 @@ class SettingsScreen:
         # toga_iOS's own setHidden() behaves like CSS visibility:hidden (invisible, but still
         # occupying its laid-out frame) rather than actually collapsing to nothing.
         show_wordpress = self.publish_method_selection.value == self._publish_wordpress
-        show_sftp = self.publish_method_selection.value == self._publish_sftp
         self.wordpress_box.style.display = "pack" if show_wordpress else "none"
         self.wordpress_box.style.visibility = "visible" if show_wordpress else "hidden"
         self.wordpress_box.style.height = NONE if show_wordpress else 0
-        self.sftp_box.style.display = "pack" if show_sftp else "none"
-        self.sftp_box.style.visibility = "visible" if show_sftp else "hidden"
-        self.sftp_box.style.height = NONE if show_sftp else 0
         # Same reasoning for both: neither means anything with no publish method chosen -- found
         # in practice, left enabled with "Niet publiceren" picked, they read as real, live
         # settings despite doing nothing at all in that state.
-        native_ui.set_switch_enabled(self.boot_publish_every_round_switch, show_wordpress or show_sftp)
-        native_ui.set_switch_enabled(self.auto_publish_switch, show_wordpress or show_sftp)
+        native_ui.set_switch_enabled(self.boot_publish_every_round_switch, show_wordpress)
+        native_ui.set_switch_enabled(self.auto_publish_switch, show_wordpress)
 
     async def _on_clear_data_cache(self, widget):
         confirmed = await self.app.main_window.dialog(
@@ -354,6 +343,24 @@ class SettingsScreen:
             if path.exists():
                 path.unlink()
         await self.app.main_window.dialog(InfoDialog(t("section_cache"), t("toast_cache_cleared")))
+
+    async def _on_delete_ebl_files(self, widget):
+        title = t("section_ebl_files")
+        if self.app.sync_in_progress or self.app.boot_mode_controller.busy:
+            await self.app.main_window.dialog(InfoDialog(title, t("toast_ebl_delete_busy")))
+            return
+        folder = self.app.ebl_dir()
+        count, size = ebl_storage.describe(folder)
+        if count == 0:
+            await self.app.main_window.dialog(InfoDialog(title, t("toast_ebl_files_none")))
+            return
+        confirmed = await self.app.main_window.dialog(
+            ConfirmDialog(title, t("dialog_delete_ebl_message", count=count, size=size))
+        )
+        if not confirmed:
+            return
+        deleted, freed = ebl_storage.delete_all(folder)
+        await self.app.main_window.dialog(InfoDialog(title, t("toast_ebl_files_deleted", count=deleted, size=freed)))
 
     async def _on_cancel(self, widget):
         self._remove_keyboard_avoidance()
@@ -395,46 +402,17 @@ class SettingsScreen:
             }[self.theme_selection.value],
         }
 
-        # Only the picked method's fields are actually saved -- the other route(s) are cleared
-        # instead of just left untouched, same reasoning as SettingsActivity.kt's own save
-        # handler: the radio/selection choice is a real, unambiguous either-or-or-neither rather
-        # than just a display filter.
+        # Only saved when WordPress is the picked method -- otherwise the fields are cleared, same
+        # reasoning as SettingsActivity.kt's own save handler: the choice is real, not just a display
+        # filter.
         if self.publish_method_selection.value == self._publish_wordpress:
             fields.update(
                 rest_upload_url=self.rest_url_field.value.strip(),
                 rest_upload_user=self.rest_user_field.value.strip(),
                 rest_upload_password=self.rest_password_field.value,
-                sftp_host="",
-                sftp_port=DEFAULT_SFTP_PORT,
-                sftp_user="",
-                sftp_password="",
-                sftp_remote_path="",
-                sftp_host_key_fingerprint="",
-            )
-        elif self.publish_method_selection.value == self._publish_sftp:
-            fields.update(
-                rest_upload_url="",
-                rest_upload_user="",
-                rest_upload_password="",
-                sftp_host=self.sftp_host_field.value.strip(),
-                sftp_port=app_settings.parse_int(self.sftp_port_field.value, DEFAULT_SFTP_PORT, app_settings.MINIMUM_PORT),
-                sftp_user=self.sftp_user_field.value.strip(),
-                sftp_password=self.sftp_password_field.value,
-                sftp_remote_path=self.sftp_remote_path_field.value.strip(),
-                sftp_host_key_fingerprint=self.sftp_host_key_field.value.strip(),
             )
         else:
-            fields.update(
-                rest_upload_url="",
-                rest_upload_user="",
-                rest_upload_password="",
-                sftp_host="",
-                sftp_port=DEFAULT_SFTP_PORT,
-                sftp_user="",
-                sftp_password="",
-                sftp_remote_path="",
-                sftp_host_key_fingerprint="",
-            )
+            fields.update(rest_upload_url="", rest_upload_user="", rest_upload_password="")
 
         self.store.update(**fields)
         self.app.apply_theme_mode()

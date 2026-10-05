@@ -3,7 +3,7 @@
 iOS counterpart to [mysailinglogbook-android](https://github.com/Ayuus/mysailinglogbook-android): syncs
 voyage data from a boat's [Actisense W2K-2](https://actisense.com) NMEA 2000-to-WiFi gateway,
 builds the same HTML sailing logbook the desktop [nmea2log](https://github.com/Ayuus/nmea2log)
-CLI produces, shows it in-app, and (optionally) publishes it to a WordPress site or over SFTP --
+CLI produces, shows it in-app, and (optionally) publishes it to a WordPress site --
 same feature set as the Android app, same underlying `nmea2log` Python package, different
 platform.
 
@@ -49,7 +49,9 @@ app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
   the toolbar itself stays visible/usable throughout (including while a sync is running), matching
   `viewLocalLogbook()`'s own documented behavior.
 - **Settings**: mirrors `SettingsActivity.kt` field-for-field (W2K-2 login, boat identity,
-  publish method, boat-mode section, cache-clear buttons, and an Appearance section -- see below).
+  publish method, boat-mode section, cache-clear buttons, a **Delete** button for the local `.ebl`
+  files (counts them, asks for confirmation with the number and size, then deletes them and the empty
+  folders; `nmea2log.ebl_storage`, shared with the Android app) and an Appearance section -- see below).
   iOS forces two adaptations, documented in `settings_screen.py`: no second `toga.Window` (iOS
   disallows one), so this swaps the single MainWindow's content in place instead; and
   `toga.Selection` (an iOS picker) instead of Android's RadioGroup/Spinner. Persisted as plain
@@ -76,10 +78,8 @@ app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
   (`resources/icons-svg/app-icon.svg`) at every size Xcode's `AppIcon.appiconset` and
   `Splash.imageset` need (see "Real gotchas" below for how those sizes actually map).
 - **Publish**: uploads the just-built logbook to a WordPress site over REST
-  (`upload_via_rest()`, `_publish_logbook()` in `app.py`), same REST-preferred-over-SFTP choice as
-  Android's own `LogbookPublisher.kt`. SFTP itself can't be ported to iOS at all (no
-  `cryptography` wheel available for iOS), so picking it shows a clear "not supported" error
-  instead of silently failing.
+  (`upload_via_rest()`, `_publish_logbook()` in `app.py`), the same as Android's own
+  `LogbookPublisher.kt`. WordPress is the only publish destination in both apps.
 - **Boat mode**: drives the same `nmea2log.bootmode.BootModeMachine` state machine Android's own
   `BootModeController.kt`/`W2kBootExecutor.kt` drive (`boot_mode_controller.py`). iOS has no
   foreground service, so there are two ways it runs:

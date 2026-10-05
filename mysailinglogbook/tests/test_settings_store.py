@@ -3,7 +3,7 @@ batched update() call instead of Android's own per-field property setters."""
 
 import pytest
 
-from mysailinglogbook.settings_store import DEFAULT_MIN_STOP_MINUTES, DEFAULT_SFTP_PORT, SettingsStore
+from mysailinglogbook.settings_store import DEFAULT_MIN_STOP_MINUTES, SettingsStore
 
 
 def test_a_fresh_store_has_the_same_defaults_as_android(tmp_path):
@@ -14,7 +14,6 @@ def test_a_fresh_store_has_the_same_defaults_as_android(tmp_path):
     assert store.auto_sync_on_launch is False
     assert store.auto_publish_after_build is True
     assert store.min_stop_minutes == DEFAULT_MIN_STOP_MINUTES
-    assert store.sftp_port == DEFAULT_SFTP_PORT
     assert store.boot_round_interval_minutes == 60
     assert store.boot_final_on_harbour is True
     assert store.boot_final_on_left_boat is True
@@ -90,13 +89,14 @@ def test_is_rest_upload_config_complete_needs_all_three_fields(tmp_path):
     assert store.is_rest_upload_config_complete is True
 
 
-def test_is_sftp_config_complete_needs_all_four_fields(tmp_path):
-    store = SettingsStore(tmp_path)
-    store.update(sftp_host="example.com", sftp_user="user", sftp_password="pw")
-    assert store.is_sftp_config_complete is False
+def test_settings_of_an_older_version_with_sftp_keys_still_load(tmp_path):
+    (tmp_path / "settings.json").write_text('{"w2k2_user": "admin", "sftp_host": "example.com"}')
 
-    store.update(sftp_remote_path="/logbook.html")
-    assert store.is_sftp_config_complete is True
+    store = SettingsStore(tmp_path)
+
+    assert store.w2k2_user == "admin"
+    with pytest.raises(KeyError):
+        store.update(sftp_host="example.com")
 
 
 def test_theme_mode_defaults_to_system_and_persists(tmp_path):

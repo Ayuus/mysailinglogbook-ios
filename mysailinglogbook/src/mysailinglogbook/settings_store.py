@@ -1,6 +1,6 @@
 """
 Persists the same settings as Android's own SettingsStore.kt: W2K-2 login, boat identity, and
-the SFTP/WordPress publish settings -- see that file's own doc comments for the full field-by-
+the WordPress publish settings -- see that file's own doc comments for the full field-by-
 field reasoning (why some fields are deliberately never defaulted, min_stop_minutes matching the
 desktop CLI's own --min-stop-minutes default, etc.), replicated here field-for-field (snake_case
 instead of camelCase, otherwise the same names/defaults).
@@ -29,7 +29,6 @@ from nmea2log import app_settings
 
 # The defaults of both apps are defined once, in nmea2log/app_settings.py (SettingsStore.kt gets them as a
 # generated Kotlin file); the comments on why a field is never defaulted are there too.
-DEFAULT_SFTP_PORT = app_settings.DEFAULT_SFTP_PORT
 DEFAULT_MIN_STOP_MINUTES = app_settings.DEFAULT_MIN_STOP_MINUTES
 
 _DEFAULTS: Dict[str, Any] = dict(app_settings.DEFAULTS)
@@ -107,36 +106,6 @@ class SettingsStore:
     @property
     def is_rest_upload_config_complete(self) -> bool:
         return app_settings.is_rest_complete(self.rest_upload_url, self.rest_upload_user, self.rest_upload_password)
-
-    @property
-    def sftp_host(self) -> str:
-        return self._values["sftp_host"]
-
-    @property
-    def sftp_port(self) -> int:
-        return self._values["sftp_port"]
-
-    @property
-    def sftp_user(self) -> str:
-        return self._values["sftp_user"]
-
-    @property
-    def sftp_password(self) -> str:
-        return self._values["sftp_password"]
-
-    @property
-    def sftp_remote_path(self) -> str:
-        return self._values["sftp_remote_path"]
-
-    @property
-    def sftp_host_key_fingerprint(self) -> str:
-        return self._values["sftp_host_key_fingerprint"]
-
-    @property
-    def is_sftp_config_complete(self) -> bool:
-        return app_settings.is_sftp_complete(
-            self.sftp_host, self.sftp_user, self.sftp_password, self.sftp_remote_path
-        )
 
     @property
     def boot_round_interval_minutes(self) -> int:

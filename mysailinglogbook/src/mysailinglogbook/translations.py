@@ -83,18 +83,6 @@ _STRINGS = {
         "fr": "Une publication est déjà en cours.",
         "de": "Es läuft bereits eine Veröffentlichung.",
     },
-    "log_upload_sftp_not_supported_ios": {
-        "en": "SFTP publishing isn't supported on iOS yet (no SSH library that runs on this "
-        "platform) -- switch to WordPress REST publishing in Settings instead.",
-        "nl": "Publiceren via SFTP wordt nog niet ondersteund op iOS (geen SSH-library die op "
-        "dit platform werkt) -- gebruik in plaats daarvan WordPress-publiceren via Instellingen.",
-        "fr": "La publication par SFTP n'est pas encore prise en charge sur iOS (aucune "
-        "bibliothèque SSH ne fonctionne sur cette plateforme) -- utilisez plutôt la "
-        "publication WordPress dans les Paramètres.",
-        "de": "Veröffentlichen über SFTP wird auf iOS noch nicht unterstützt (keine "
-        "SSH-Bibliothek läuft auf dieser Plattform) -- verwenden Sie stattdessen die "
-        "WordPress-Veröffentlichung in den Einstellungen.",
-    },
 }
 
 # The texts both apps show come from nmea2log (app_texts.py), the single source for them: a wording is

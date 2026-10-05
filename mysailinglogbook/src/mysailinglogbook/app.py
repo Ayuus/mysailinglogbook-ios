@@ -179,7 +179,7 @@ class MySailingLogbook(toga.App):
         self._log_flush_scheduled = False
         # Both children stay in content_area permanently -- _show_log_content()/
         # _show_logbook_content() toggle which one is visible (display+visibility, same
-        # mechanism settings_screen.py's own wordpress_box/sftp_box already use) rather than
+        # mechanism settings_screen.py's own wordpress_box already uses) rather than
         # content_area.clear()+add() swapping which widget is actually attached. Found in
         # practice, asked for explicitly to fix: removing log_view from its container and
         # re-adding it (every View tap) left its native UIScrollView's contentOffset reset to
@@ -520,7 +520,7 @@ class MySailingLogbook(toga.App):
             self.log("[info] " + t("log_publish_already_running"))
             return
         store = self.settings_store
-        if not store.is_rest_upload_config_complete and not store.is_sftp_config_complete:
+        if not store.is_rest_upload_config_complete:
             self.showing_local_logbook = False
             self._show_log_content()
             self.log("[info] " + t("log_fill_publish_settings"))
@@ -551,19 +551,12 @@ class MySailingLogbook(toga.App):
         nothing set up to publish to is not a failure, only an upload that was attempted and failed)."""
         published = self._publish_logbook()
         store = self.settings_store
-        return run_outcome.publish_failed(
-            published, store.is_rest_upload_config_complete, store.is_sftp_config_complete
-        )
+        return run_outcome.publish_failed(published, store.is_rest_upload_config_complete)
 
     def _publish_logbook(self) -> bool:
         """The actual upload step, run on the same background thread as the build above -- see
-        LogbookPublisher.kt's own publish() for the Android original this mirrors (REST preferred
-        over SFTP whenever both are configured, never falls back silently from one to the other).
-        SFTP itself can't be ported here at all (see translations.py's own
-        log_upload_sftp_not_supported_ios comment on why): every maintained Python SSH library
-        needs the `cryptography` package's compiled C extension, which has no iOS build on PyPI,
-        and cross-compiling OpenSSL/a Rust toolchain for iOS -- or bridging a native Swift SSH
-        library in instead -- is real, separate work, not a quick port.
+        LogbookPublisher.kt's own publish() for the Android original this mirrors (publishing is
+        WordPress REST only).
 
         Returns whether the upload actually happened and succeeded -- boot_mode_controller.py's
         own Publish action needs this (same bool LogbookPublisher.kt's own publish() returns) to
@@ -593,9 +586,6 @@ class MySailingLogbook(toga.App):
                 self.log, "[ok] " + t("log_upload_ok_wordpress", url=url)
             )
             return True
-        elif store.is_sftp_config_complete:
-            self.loop.call_soon_threadsafe(self.log, "[error] " + t("log_upload_sftp_not_supported_ios"))
-            return False
         else:
             self.loop.call_soon_threadsafe(self.log, "[skip] " + t("log_upload_not_configured"))
             return False
@@ -832,10 +822,10 @@ class MySailingLogbook(toga.App):
 
     def _publish_configured(self) -> bool:
         store = self.settings_store
-        return store.is_rest_upload_config_complete or store.is_sftp_config_complete
+        return store.is_rest_upload_config_complete
 
     def update_publish_button_enabled(self) -> None:
-        """Publish is only usable once WordPress or SFTP is filled in (MainActivity.updatePublishButtonEnabled()):
+        """Publish is only usable once WordPress is filled in (MainActivity.updatePublishButtonEnabled()):
         called at start and when Settings was saved. The log says so once, when the button has just become
         unusable, instead of the button silently looking broken."""
         configured = self._publish_configured()

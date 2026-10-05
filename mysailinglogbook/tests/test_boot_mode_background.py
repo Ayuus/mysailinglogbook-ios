@@ -43,7 +43,6 @@ class FakeStore:
     boot_left_boat_minutes = 20
     boot_stop_after_final = False
     is_rest_upload_config_complete = True
-    is_sftp_config_complete = False
     is_w2k2_config_complete = True
     w2k2_user = "admin"
     w2k2_password = "pw"
