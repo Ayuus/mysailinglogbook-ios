@@ -33,6 +33,8 @@ from toga.style.pack import ROW, Pack
 
 from nmea2log import app_constants
 
+from .handlers import chain_on_change
+
 _UIApplication = ObjCClass("UIApplication")
 _UIView = ObjCClass("UIView")
 _UIFont = ObjCClass("UIFont")
@@ -293,17 +295,15 @@ def closing_picker(selection, loop):
     toolbar.setItems([space, done])
     field.inputAccessoryView = toolbar
 
-    previous = selection.on_change
     pending = {"handle": None}
 
-    def _on_change(widget, **kwargs) -> None:
-        if previous is not None:
-            previous(widget)
+    def _close_soon() -> None:
         if pending["handle"] is not None:
             pending["handle"].cancel()
         pending["handle"] = loop.call_later(PICKER_CLOSE_DELAY_S, field.resignFirstResponder)
 
-    selection.on_change = _on_change
+    # chain_on_change(): the handler that was set before keeps working (see its doc comment).
+    selection.on_change = chain_on_change(selection.on_change, _close_soon)
     return selection
 
 
