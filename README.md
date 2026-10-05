@@ -81,9 +81,23 @@ app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
   `cryptography` wheel available for iOS), so picking it shows a clear "not supported" error
   instead of silently failing.
 - **Boat mode**: drives the same `nmea2log.bootmode.BootModeMachine` state machine Android's own
-  `BootModeController.kt`/`W2kBootExecutor.kt` drive (`boot_mode_controller.py`), foreground-only
-  -- no background-service equivalent, no persisted state across an app close (see that file's own
-  doc comment). The screen stays awake while it's active (`UIApplication.idleTimerDisabled`).
+  `BootModeController.kt`/`W2kBootExecutor.kt` drive (`boot_mode_controller.py`). iOS has no
+  foreground service, so there are two ways it runs:
+  - In the foreground it runs on timers, as before; the screen stays awake while it's active
+    (`UIApplication.idleTimerDisabled`).
+  - In the background iOS runs a `BGProcessingTask` **when iOS decides to** (some time after the time the
+    machine asked for -- possibly hours later, not at all in Low Power Mode): the machine gets a `Resume`
+    event, does what is due (look for the W2K-2, download and build, publish) and asks for the next task. A
+    local notification tells what happened. The machine's state is persisted after every step
+    (`boot_mode_state.json`), so a task that starts a fresh process, or opening the app again, carries on
+    where it was -- and every time the app becomes active it tries right away.
+  Rounds in the background are best effort (how often is iOS's choice); there is no location access on
+  purpose. The Info.plist keys (`UIBackgroundModes: processing`, `BGTaskSchedulerPermittedIdentifiers`,
+  `NSLocalNetworkUsageDescription`) are in `pyproject.toml`; `briefcase update` does not copy them into an
+  existing generated Xcode project (only `briefcase create` does), so add them to
+  `build/.../xcode/MySailingLogbook/MySailingLogbook-Info.plist` by hand when that project already exists.
+  Background tasks do not run in the Simulator; to try one on a device, pause in Xcode and run
+  `e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:@"com.ayuus.mysailinglogbook.boatmode"]`.
 - `nmea2log` itself (zero third-party dependencies, `requires-python = ">=3.10"`) builds as a
   pure-Python wheel and **imports and runs correctly inside the app on the iOS Simulator**, and
   its full real pipeline (decode -> build trips -> write HTML) has been run against real archive

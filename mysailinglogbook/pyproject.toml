@@ -172,13 +172,17 @@ requires = [
     "nmea2log @ file:///Users/m1/Github/nmea2log",
 ]
 
+# UIBackgroundModes processing + BGTaskSchedulerPermittedIdentifiers: the boat mode's background rounds (see
+# boot_mode_controller.py) run as a BGProcessingTask when iOS decides to; NSLocalNetworkUsageDescription: the text of
+# the "find devices on your local network" question for reaching the W2K-2.
+#
 # Exposes the app's Documents folder (where ebl_dir() puts the .ebl archive -- see its own doc
 # comment) to the Files app and Finder-over-USB, matching Android's own getExternalFilesDir()
 # being USB-browsable (EblStorage.kt's own reasoning for using that instead of internal
 # storage). Without this, that comment's own claim ("reachable from the Files app / Finder over
 # USB") wasn't actually true -- found in practice, asked for explicitly to fix: the folder
 # existed but neither the Files app nor Finder ever showed it without this key.
-info = { "UIFileSharingEnabled" = true, "LSSupportsOpeningDocumentsInPlace" = true }
+info = { "UIFileSharingEnabled" = true, "LSSupportsOpeningDocumentsInPlace" = true, "UIBackgroundModes" = ["processing"], "BGTaskSchedulerPermittedIdentifiers" = ["com.ayuus.mysailinglogbook.boatmode"], "NSLocalNetworkUsageDescription" = "Om de W2K-2 op het boordnetwerk te vinden en de logbestanden op te halen." }
 
 [tool.briefcase.app.mysailinglogbook.android]
 requires = [

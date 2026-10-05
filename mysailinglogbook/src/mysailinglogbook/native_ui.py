@@ -382,3 +382,124 @@ def present_folder_picker(app) -> FolderPickerDelegate:
         picker, animated=True, completion=None
     )
     return delegate
+
+
+# Blocks handed to UIKit must stay alive as long as UIKit may call them.
+_kept_blocks: list = []
+
+
+# -- the app coming to the foreground ----------------------------------------------------------------------------
+
+
+def observe_app_became_active(callback) -> None:
+    """Calls ``callback()`` every time the app becomes active (at launch, and each time it is opened again)."""
+
+    def _active(_notification: objc_id) -> None:
+        callback()
+
+    block = Block(_active, None, objc_id)
+    _kept_blocks.append(block)
+    _NSNotificationCenter.defaultCenter.addObserverForName(
+        "UIApplicationDidBecomeActiveNotification", object=None, queue=None, usingBlock=block
+    )
+
+
+# -- background tasks and local notifications -----------------------------------------------------------------------
+
+_BGTaskScheduler = ObjCClass("BGTaskScheduler")
+_BGProcessingTaskRequest = ObjCClass("BGProcessingTaskRequest")
+_NSDate = ObjCClass("NSDate")
+_UNUserNotificationCenter = ObjCClass("UNUserNotificationCenter")
+_UNMutableNotificationContent = ObjCClass("UNMutableNotificationContent")
+_UNNotificationRequest = ObjCClass("UNNotificationRequest")
+
+# UNAuthorizationOptions .alert | .sound
+_NOTIFICATION_OPTIONS_ALERT_SOUND = 1 | 2
+
+
+
+def _scheduler():
+    try:
+        return _BGTaskScheduler.sharedScheduler
+    except Exception:
+        return _BGTaskScheduler.sharedScheduler()
+
+
+def register_background_task(identifier: str, handler) -> bool:
+    """Registers ``handler(task)`` for the background task ``identifier`` (also listed in Info.plist under
+    BGTaskSchedulerPermittedIdentifiers). Must be done while the app is still launching. iOS calls the handler on a
+    queue of its own when it decides to run the task; ``task`` is the BGTask, to be finished with
+    complete_background_task(). False when it could not be registered (the simulator has no background tasks)."""
+
+    def _launched(task: objc_id) -> None:
+        handler(ObjCInstance(task))
+
+    block = Block(_launched, None, objc_id)
+    _kept_blocks.append(block)
+    try:
+        return bool(_scheduler().registerForTaskWithIdentifier(identifier, usingQueue=None, launchHandler=block))
+    except Exception:
+        return False
+
+
+def schedule_background_task(identifier: str, at_ms: int) -> bool:
+    """Asks iOS to run the task ``identifier`` some time after ``at_ms`` (epoch milliseconds). iOS decides when:
+    it may be much later (hours), and not at all when the phone is in Low Power Mode or the app is rarely used. Needs
+    no power connection and no internet (the W2K-2 is on the local network). Replaces a request that is still
+    pending. False when iOS refused (e.g. in the simulator)."""
+    try:
+        scheduler = _scheduler()
+        scheduler.cancelTaskRequestWithIdentifier(identifier)
+        request = _BGProcessingTaskRequest.alloc().initWithIdentifier(identifier)
+        request.earliestBeginDate = _NSDate.dateWithTimeIntervalSince1970(at_ms / 1000)
+        request.requiresNetworkConnectivity = False
+        request.requiresExternalPower = False
+        return bool(scheduler.submitTaskRequest(request, error=None))
+    except Exception:
+        return False
+
+
+def cancel_background_tasks(identifier: str) -> None:
+    try:
+        _scheduler().cancelTaskRequestWithIdentifier(identifier)
+    except Exception:
+        pass
+
+
+def set_background_task_expiration(task, handler) -> None:
+    """``handler()`` is called when iOS is about to end the task's time; the task must be finished then."""
+    block = Block(handler, None)
+    _kept_blocks.append(block)
+    task.expirationHandler = block
+
+
+def complete_background_task(task, success: bool) -> None:
+    task.setTaskCompletedWithSuccess(success)
+
+
+def request_notification_permission() -> None:
+    """Asks (once; iOS remembers the answer) to show notifications, so a background round can tell what it did."""
+
+    def _done(granted: bool, error: objc_id) -> None:
+        pass
+
+    block = Block(_done, None, bool, objc_id)
+    _kept_blocks.append(block)
+    try:
+        _UNUserNotificationCenter.currentNotificationCenter().requestAuthorizationWithOptions(
+            _NOTIFICATION_OPTIONS_ALERT_SOUND, completionHandler=block
+        )
+    except Exception:
+        pass
+
+
+def post_local_notification(identifier: str, title: str, body: str) -> None:
+    """Shows a notification right now (a request with the same identifier replaces the earlier one)."""
+    try:
+        content = _UNMutableNotificationContent.alloc().init()
+        content.title = title
+        content.body = body
+        request = _UNNotificationRequest.requestWithIdentifier(identifier, content=content, trigger=None)
+        _UNUserNotificationCenter.currentNotificationCenter().addNotificationRequest(request, withCompletionHandler=None)
+    except Exception:
+        pass

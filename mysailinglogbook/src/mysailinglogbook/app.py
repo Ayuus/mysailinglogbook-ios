@@ -17,7 +17,7 @@ from nmea2log import android_entry, app_constants, import_ebl, run_outcome
 from nmea2log import log as nmea_log
 from nmea2log.upload import UploadError, normalize_rest_upload_url, upload_via_rest
 
-from .boot_mode_controller import BootModeController
+from .boot_mode_controller import BACKGROUND_TASK_ID, BootModeController
 from . import native_ui
 from .network import detect_subnet_prefix
 from .settings_screen import SettingsScreen
@@ -232,6 +232,18 @@ class MySailingLogbook(toga.App):
         self._busy_button = None
         self._run_initiator = "build"
         self.update_publish_button_enabled()
+
+        # The boat mode's background rounds (see boot_mode_controller.py). Registered here, still inside the launch: iOS
+        # starts the app for them, on a queue of its own (hence the loop). The mode carries on after the app was
+        # stopped (its state is persisted), and every time the app becomes active it tries at once.
+        self.boot_mode_controller.restore()
+        native_ui.observe_app_became_active(
+            lambda: self.loop.call_soon_threadsafe(self.boot_mode_controller.on_app_became_active)
+        )
+        native_ui.register_background_task(
+            BACKGROUND_TASK_ID,
+            lambda task: self.loop.call_soon_threadsafe(self.boot_mode_controller.on_background_task, task),
+        )
 
         # "Boot-modus starten bij openen" (Settings) -- mirrors MainActivity.kt's own
         # shouldAutoStartBootMode(), called from onCreate(). Found in practice: this setting
