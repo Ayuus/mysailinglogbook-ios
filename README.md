@@ -90,7 +90,9 @@ app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
     event, does what is due (look for the W2K-2, download and build, publish) and asks for the next task. A
     local notification tells what happened. The machine's state is persisted after every step
     (`boot_mode_state.json`), so a task that starts a fresh process, or opening the app again, carries on
-    where it was -- and every time the app becomes active it tries right away.
+    where it was -- and every time the app becomes active it tries right away. The log says so ("looking for the
+    W2K-2 now"), and then what came of it: the W2K-2 is not reachable from this network (and when the next try is),
+    reachable with nothing new, or a round that starts.
   Rounds in the background are best effort (how often is iOS's choice); there is no location access on
   purpose. The Info.plist keys (`UIBackgroundModes: processing`, `BGTaskSchedulerPermittedIdentifiers`,
   `NSLocalNetworkUsageDescription`) are in `pyproject.toml`; `briefcase update` does not copy them into an
@@ -159,6 +161,27 @@ Briefcase -- see "Status" above. The alternatives considered but not needed:
   embedded interpreter than the raw Python C API; worth adding later if writing directly against
   `Py_Initialize()`/the C API from Swift gets unwieldy, but not required to embed Python itself.
 - Reimplementing the needed subset natively in Swift -- not needed; `nmea2log` imports as-is.
+
+## Backing up your data
+
+What is worth keeping is the **`.ebl` archive**: the logbook and the caches are rebuilt from it with one tap on
+assemble.
+
+- **The archive** is the folder `Documents/Actisense/` of the app. The app enables file sharing, so it shows in the
+  **Files** app (On My iPhone > My Sailing Logbook > Actisense) and in Finder over USB (select the iPhone > Files). The
+  simplest cloud backup: in Files, copy the folder to **iCloud Drive**, or to OneDrive, Dropbox or Google Drive once
+  their apps are installed. Do it after every trip or season, and **before** you use Settings > Local .ebl files >
+  Delete.
+- **Restoring**: copy the folder back into the app's folder in Files (or Finder) and tap assemble. The first assemble
+  takes longer, as the caches are rebuilt too.
+- **The settings** are `Documents/settings.json` in the same place, **with the W2K-2 and WordPress passwords in plain
+  text**: keep that file out of cloud folders you do not fully trust. Typing the logins in again after a restore (from a
+  password manager) is the safe way.
+- **The iPhone's own backup** (iCloud, or Finder on a Mac) includes the app's Documents folder unless you have switched
+  it off, so a restored phone gets the archive and the settings back. The archive can be several GB, more than what is
+  left of the 5 GB of free iCloud space next to everything else: buy more space, or switch this app off in iPhone
+  Settings > your name > iCloud > Manage Account Storage > Backups.
+- **The built logbook** is also on your WordPress site when you publish.
 
 ## The log file
 
