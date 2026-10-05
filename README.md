@@ -183,12 +183,24 @@ real one) -- generated with `examples/generate_demo_logbook.py` in the
 -- the log (tap the log button).*
 
 <p>
+<img src="docs/screenshots/map-trip.png" width="230" alt="The map of one trip, opened from the Map button in the trip list">
+<img src="docs/screenshots/trip-log.png" width="230" alt="The log of one trip, opened from the Log button">
+<img src="docs/screenshots/map-overview.png" width="230" alt="The overview map of the year, opened from the Overview link">
+</p>
+
+*The maps in the logbook (OpenStreetMap): the **Map** button of a trip shows its route -- its **Log** button the positions, course and speed along the way, with the water temperature and the boat's motion -- the **Overview** link of a year puts all trips of that year on one map.*
+
+<p>
 <img src="docs/screenshots/settings.png" width="230" alt="Settings: W2K-2, boat, trips, publish">
 <img src="docs/screenshots/settings-more.png" width="230" alt="Settings: boat mode, appearance, clearing the caches">
 <img src="docs/screenshots/boat-mode.png" width="230" alt="Boat mode on: the filled sailboat button and its status in the log">
 </p>
 
 *Settings (top and bottom) -- boat mode on: the sailboat button is filled and the log reports what it is doing.*
+
+The three map pictures were taken from a copy of the demo logbook that opens the Overview, the log of one trip or the map of
+that trip by itself right after loading: the simulator cannot be tapped from a script, and what the app shows is the logbook's
+own page either way.
 
 ## Related repos
 
