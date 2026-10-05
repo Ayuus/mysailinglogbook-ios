@@ -192,10 +192,9 @@ class BootModeController:
         if not self.active or self._pending_work > 0 or self.busy or self.machine.state.working is not None:
             return
         self._log_missed_background_round()
-        # Said out loud, and what came of it said afterwards (see _on_probe_result()): trying at once leaves no trace
-        # in the log when the W2K-2 is simply not on this network, which reads as "nothing happened".
+        # What came of it is said afterwards (see _on_probe_result()): trying at once leaves no trace in the log when
+        # the W2K-2 is simply not on this network, which reads as "nothing happened".
         self._catching_up = True
-        self.app.log("[info] " + t("boat_catch_up_looking"))
         self._on_tick_fired()
         if self._pending_work == 0:
             self._catching_up = False  # nothing was started (the machine was busy): no result to report
@@ -296,9 +295,9 @@ class BootModeController:
         if not catching_up:
             return
         if not found:
-            if self._next_wake_ms is not None:
-                next_text = time.strftime("%H:%M", time.localtime(self._next_wake_ms / 1000))
-                self.app.log("[info] " + t("boat_catch_up_not_found", next=next_text))
+            text = format_status("W2K_NOT_FOUND_RETRY", self._next_wake_ms) if self._next_wake_ms is not None else None
+            if text:  # the same line a round that finds no W2K-2 gives
+                self.app.log("[info] " + text)
         elif self._pending_work == 0:
             self.app.log("[info] " + t("boat_catch_up_nothing_new"))  # reachable, and no round was started
 

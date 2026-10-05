@@ -340,18 +340,7 @@ def _dutch(monkeypatch):
     monkeypatch.setattr(translations, "_LANGUAGE", "nl")
 
 
-def test_opening_the_app_says_it_is_looking_for_the_w2k2_at_once(tmp_path, monkeypatch):
-    _dutch(monkeypatch)
-    controller = make_controller(tmp_path)
-    controller._probe_subnet = lambda subnet: (False, False)
-    controller.start()
-
-    controller.on_app_became_active()
-
-    assert any("ik zoek nu meteen naar de W2K-2" in line for line in controller.app.logs)
-
-
-def test_opening_the_app_says_when_the_w2k2_is_not_reachable_and_when_it_tries_next(tmp_path, monkeypatch):
+def test_opening_the_app_says_when_the_w2k2_is_not_reachable_and_when_it_tries_next_in_one_short_line(tmp_path, monkeypatch):
     _dutch(monkeypatch)
     controller = make_controller(tmp_path)
     controller._probe_subnet = lambda subnet: (False, False)
@@ -360,8 +349,11 @@ def test_opening_the_app_says_when_the_w2k2_is_not_reachable_and_when_it_tries_n
 
     controller.on_app_became_active()
 
-    not_found = [line for line in controller.app.logs if "niet bereikbaar" in line]
-    assert len(not_found) == 1 and "volgende poging om" in not_found[0]
+    assert [line for line in controller.app.logs if "W2K-2" in line] == [
+        line for line in controller.app.logs if "niet bereikbaar, opnieuw om" in line
+    ]
+    assert len([line for line in controller.app.logs if "niet bereikbaar, opnieuw om" in line]) == 1
+    assert not any("ik zoek nu meteen" in line for line in controller.app.logs)
 
 
 def test_opening_the_app_with_the_w2k2_in_reach_starts_a_round_and_says_nothing_about_not_found(tmp_path, monkeypatch):

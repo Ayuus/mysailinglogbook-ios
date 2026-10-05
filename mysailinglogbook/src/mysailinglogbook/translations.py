@@ -65,24 +65,17 @@ _STRINGS = {
         "fr": "Mode bateau : le tour prévu à {planned} n'a pas été exécuté en arrière-plan (iOS décide quand une tâche d'arrière-plan s'exécute).",
         "de": "Bootsmodus: die für {planned} geplante Runde wurde im Hintergrund nicht ausgeführt (iOS entscheidet, wann eine Hintergrundaufgabe läuft).",
     },
-    "boat_catch_up_looking": {
-        "en": "Boat mode: the app is open again -- looking for the W2K-2 now instead of waiting for the next planned round.",
-        "nl": "Boot-modus: de app is weer open -- ik zoek nu meteen naar de W2K-2 in plaats van op de volgende geplande ronde te wachten.",
-        "fr": "Mode bateau : l'application est de nouveau ouverte -- je cherche le W2K-2 tout de suite au lieu d'attendre le prochain tour prévu.",
-        "de": "Bootsmodus: die App ist wieder offen -- ich suche jetzt sofort nach dem W2K-2, statt auf die nächste geplante Runde zu warten.",
-    },
-    "boat_catch_up_not_found": {
-        # {next} substituted at call time (HH:MM).
-        "en": "The W2K-2 is not reachable from this network right now. Boat mode keeps trying (next try at {next}).",
-        "nl": "De W2K-2 is op dit moment niet bereikbaar vanaf dit netwerk. De boot-modus blijft het proberen (volgende poging om {next}).",
-        "fr": "Le W2K-2 n'est pas joignable depuis ce réseau pour le moment. Le mode bateau continue d'essayer (prochaine tentative à {next}).",
-        "de": "Der W2K-2 ist von diesem Netzwerk aus gerade nicht erreichbar. Der Bootsmodus versucht es weiter (nächster Versuch um {next}).",
-    },
     "boat_catch_up_nothing_new": {
-        "en": "The W2K-2 is reachable; there are no new files to fetch.",
-        "nl": "De W2K-2 is bereikbaar; er zijn geen nieuwe bestanden om op te halen.",
-        "fr": "Le W2K-2 est joignable ; il n'y a pas de nouveaux fichiers à récupérer.",
-        "de": "Der W2K-2 ist erreichbar; es gibt keine neuen Dateien zum Abholen.",
+        "en": "Boat mode: W2K-2 reachable, no new files.",
+        "nl": "Boot-modus: W2K-2 bereikbaar, geen nieuwe bestanden.",
+        "fr": "Mode bateau : W2K-2 joignable, pas de nouveaux fichiers.",
+        "de": "Bootsmodus: W2K-2 erreichbar, keine neuen Dateien.",
+    },
+    "label_publish_method": {
+        "en": "Publish method",
+        "nl": "Publicatiewijze",
+        "fr": "Mode de publication",
+        "de": "Veröffentlichungsart",
     },
     "boat_bg_low_power": {
         "en": "Low Power Mode is on: iOS does not run background tasks then.",
