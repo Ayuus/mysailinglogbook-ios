@@ -90,7 +90,8 @@ class SettingsScreen:
             form, t("checkbox_auto_publish_after_build"), self.store.auto_publish_after_build
         )
 
-        self.publish_method_selection = toga.Selection(items=publish_options, style=Pack(margin_top=8))
+        form.add(self._wrapped_label(t("label_publish_method"), style=Pack(margin_top=8)))
+        self.publish_method_selection = toga.Selection(items=publish_options)
         if self.store.is_rest_upload_config_complete:
             self.publish_method_selection.value = self._publish_wordpress
         else:
