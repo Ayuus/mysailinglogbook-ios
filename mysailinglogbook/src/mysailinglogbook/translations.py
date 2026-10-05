@@ -60,10 +60,10 @@ _STRINGS = {
     },
     "boat_bg_missed": {
         # {planned} substituted at call time (HH:MM).
-        "en": "Boat mode: the round planned for {planned} did not run in the background (iOS decides when a background task runs).",
-        "nl": "Boot-modus: de ronde die voor {planned} gepland stond is niet in de achtergrond uitgevoerd (iOS bepaalt zelf wanneer een achtergrondtaak draait).",
-        "fr": "Mode bateau : le tour prévu à {planned} n'a pas été exécuté en arrière-plan (iOS décide quand une tâche d'arrière-plan s'exécute).",
-        "de": "Bootsmodus: die für {planned} geplante Runde wurde im Hintergrund nicht ausgeführt (iOS entscheidet, wann eine Hintergrundaufgabe läuft).",
+        "en": "Boat mode: the {planned} round did not run in the background.",
+        "nl": "Boot-modus: de ronde van {planned} is niet in de achtergrond uitgevoerd.",
+        "fr": "Mode bateau : le tour de {planned} n'a pas été exécuté en arrière-plan.",
+        "de": "Bootsmodus: die Runde um {planned} lief nicht im Hintergrund.",
     },
     "boat_catch_up_nothing_new": {
         "en": "Boat mode: W2K-2 reachable, no new files.",
@@ -78,16 +78,16 @@ _STRINGS = {
         "de": "Veröffentlichungsart",
     },
     "boat_bg_low_power": {
-        "en": "Low Power Mode is on: iOS does not run background tasks then.",
-        "nl": "Spaarstand staat aan: iOS voert dan geen achtergrondtaken uit.",
-        "fr": "Le mode économie d'énergie est activé : iOS n'exécute alors pas de tâches d'arrière-plan.",
-        "de": "Der Stromsparmodus ist an: iOS führt dann keine Hintergrundaufgaben aus.",
+        "en": "Low Power Mode is on: no background tasks then.",
+        "nl": "Spaarstand staat aan: dan draaien er geen achtergrondtaken.",
+        "fr": "Le mode économie d'énergie est activé : pas de tâches d'arrière-plan.",
+        "de": "Der Stromsparmodus ist an: dann laufen keine Hintergrundaufgaben.",
     },
     "boat_bg_refresh_off": {
-        "en": "Background App Refresh is off for this app (Settings > General > Background App Refresh).",
-        "nl": "Achtergrondverversing staat uit voor deze app (Instellingen > Algemeen > Achtergrondverversing).",
-        "fr": "L'actualisation en arrière-plan est désactivée pour cette app (Réglages > Général > Actualisation en arrière-plan).",
-        "de": "Die Hintergrundaktualisierung ist für diese App aus (Einstellungen > Allgemein > Hintergrundaktualisierung).",
+        "en": "Background App Refresh is off for this app.",
+        "nl": "Achtergrondverversing staat uit voor deze app.",
+        "fr": "L'actualisation en arrière-plan est désactivée pour cette app.",
+        "de": "Die Hintergrundaktualisierung ist für diese App aus.",
     },
     "log_publish_already_running": {
         "en": "A publish is already running.",
