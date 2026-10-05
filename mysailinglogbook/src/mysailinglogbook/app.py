@@ -506,9 +506,9 @@ class MySailingLogbook(toga.App):
         if self._cancel_if_running(self.publish_button):
             return
         # Same sequence as MainActivity.kt's own runPublish()/buildFromLocalFilesAndMaybePublish():
-        # always rebuilds fresh from local .ebl data first (not just "upload whatever HTML happens
-        # to already be on disk"), then always publishes regardless of auto_publish_after_build --
-        # an explicit tap of this button is itself the "yes, publish" instruction.
+        # uploads the logbook as it is when it is up to date, else assembles it first (nmea2log's logbook_state), then
+        # always publishes regardless of auto_publish_after_build -- an explicit tap of this button is itself the
+        # "yes, publish" instruction.
         if self.boot_mode_controller.busy:
             self.showing_local_logbook = False
             self._show_log_content()
@@ -540,6 +540,7 @@ class MySailingLogbook(toga.App):
             self.settings_store.call_sign,
             progress_callback=callback,
             min_stop_minutes=self.settings_store.min_stop_minutes,
+            skip_if_current=True,
         )
         publish_failed = False
         if result.get("ok"):
