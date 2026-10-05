@@ -160,6 +160,13 @@ Briefcase -- see "Status" above. The alternatives considered but not needed:
   `Py_Initialize()`/the C API from Swift gets unwieldy, but not required to embed Python itself.
 - Reimplementing the needed subset natively in Swift -- not needed; `nmea2log` imports as-is.
 
+## The log file
+
+The app's log (every level, also the debug lines the log view does not show) is `Documents/nmea2log.log`: visible in
+the Files app (On My iPhone > My Sailing Logbook) and Finder over USB. 90 days of lines are kept (pruned when a run
+starts) and there is no size limit; with the boat mode on, each round's download adds a debug line per file the W2K-2
+holds. Details: [nmea2log/docs/log-file.md](https://github.com/Ayuus/nmea2log/blob/main/docs/log-file.md).
+
 ## Related repos
 
 - [nmea2log](https://github.com/Ayuus/nmea2log) -- the shared Python core (decoding, trip
