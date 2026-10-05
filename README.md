@@ -30,10 +30,10 @@ working.** The `mysailinglogbook/` directory in this repo is
 the actual [Briefcase](https://github.com/beeware/briefcase)/[Toga](https://github.com/beeware/toga)
 app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
 
-- The toolbar has all 6 of Android's own buttons, in the same order (download, build, publish,
+- The toolbar has all 7 of Android's own buttons, in the same order (download, import, assemble, publish,
   view logbook, boat mode, settings), using the same icon shapes as Android's own vector
-  drawables (`ic_download_24`, `ic_refresh_24`, `ic_upload_24`, `ic_article_24`, `ic_sailboat_24`,
-  `ic_settings_24`) -- rasterized from hand-written SVGs that reproduce Android's `pathData`
+  drawables (download, folder-download, refresh, upload, article, sailboat, settings; the SVGs are in
+  `resources/icons-svg/`) -- rasterized from hand-written SVGs that reproduce Android's `pathData`
   verbatim, and the same tight, icon-only spacing (Settings pinned to the far right behind a
   flexible spacer, no visible text label -- tooltip text only, same as `iconButton()`). Icons are
   tinted via UIKit's "always template" rendering mode (`_template_tint_icon()` in `app.py`) so
@@ -70,9 +70,11 @@ app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
   in `Launch Screen.storyboard` -- it cannot honor the in-app override for that one brief frame.
   Android has the same limitation for its own splash screen, for the same underlying reason (the OS
   draws it before any app code runs).
-- A real test suite (`tests/`, run via Briefcase's own `briefcase run iOS --test`) covers the pure
-  logic: `network.py`'s private-IPv4 classification (mirrors Android's own
-  `HotspotDetectorTest.kt`), `settings_store.py`, and `translations.py`.
+- A real test suite (`tests/`) covers the pure logic: `network.py`'s private-IPv4 classification (mirrors
+  Android's own `HotspotDetectorTest.kt`), `settings_store.py`, `translations.py`, the boat-mode controller (with
+  stand-ins for the iOS calls) and `handlers.py`. Run it with pytest (the iOS classes it needs come from
+  `rubicon-objc`, which imports on a Mac); the two tests in `test_app.py` need UIKit itself and only pass on an
+  iPhone or in the Simulator.
 - The app's own launcher/app icon matches Android's design exactly (navy `#0D3358` background,
   cream `#F5F1E6` book-with-course-line glyph) -- rendered from one shared SVG
   (`resources/icons-svg/app-icon.svg`) at every size Xcode's `AppIcon.appiconset` and
@@ -90,9 +92,9 @@ app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
     event, does what is due (look for the W2K-2, download and build, publish) and asks for the next task. A
     local notification tells what happened. The machine's state is persisted after every step
     (`boot_mode_state.json`), so a task that starts a fresh process, or opening the app again, carries on
-    where it was -- and every time the app becomes active it tries right away. The log says so ("looking for the
-    W2K-2 now"), and then what came of it: the W2K-2 is not reachable from this network (and when the next try is),
-    reachable with nothing new, or a round that starts.
+    where it was -- and every time the app becomes active it tries right away. The log then says what came of it,
+    in one short line: the W2K-2 is not reachable from this network (and when the next try is), reachable with
+    nothing new, or a round that starts as usual. When the planned round was missed, a line says so first.
   Rounds in the background are best effort (how often is iOS's choice); there is no location access on
   purpose. The Info.plist keys (`UIBackgroundModes: processing`, `BGTaskSchedulerPermittedIdentifiers`,
   `NSLocalNetworkUsageDescription`) are in `pyproject.toml`; `briefcase update` does not copy them into an
@@ -104,9 +106,9 @@ app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
   pure-Python wheel and **imports and runs correctly inside the app on the iOS Simulator**, and
   its full real pipeline (decode -> build trips -> write HTML) has been run against real archive
   folders from the developer's own boat.
-- Needed Python 3.14 specifically to match `nmea2log`'s own `requires-python` and Chaquopy's
-  Python version on the Android side (installed via [uv](https://docs.astral.sh/uv/), no sudo
-  needed on a fresh Mac instance -- Homebrew needs admin rights this account didn't have).
+- Runs on Python 3.14, the version Chaquopy bundles on the Android side (`nmea2log` itself only requires
+  `>=3.10`); Briefcase and the tests are run through [uv](https://docs.astral.sh/uv/) with `--python 3.14`, no sudo
+  needed on a fresh Mac instance -- Homebrew needs admin rights this account didn't have.
 - Real gotchas found in practice, worth remembering:
   - A fresh macOS instance with no one ever logged in at the GUI (only ever SSH'd into) could
     download the Simulator runtime but never got it past "Verifying" / registered as a usable
@@ -117,7 +119,10 @@ app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
     itself -- only `briefcase update` does that (`briefcase build` only refreshes app metadata and
     compiles the Xcode project). Editing `src/` and going straight to `briefcase build` silently
     runs the stale bundled code with no error; always `briefcase update` first when app content
-    changed.
+    changed. The same goes for Xcode's own Run: it compiles the Xcode project as it is, so Python changes
+    reach the iPhone only through `briefcase update`. And a change in `nmea2log` (a new module, say) needs
+    `briefcase update iOS -r`, which reinstalls the requirements; without `-r` the bundled copy of `nmea2log`
+    stays old and the app can fail on import.
   - `briefcase run` **wipes the app's sandboxed Documents directory** (settings.json, any local
     `.ebl` archive, `logbook.html`, ...) on every single run -- its own log says why: "Uninstalling
     any existing app version" runs before every install, and an iOS uninstall deletes the whole
