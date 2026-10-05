@@ -198,10 +198,6 @@ real one) -- generated with `examples/generate_demo_logbook.py` in the
 
 *Settings (top and bottom) -- boat mode on: the sailboat button is filled and the log reports what it is doing.*
 
-The three map pictures were taken from a copy of the demo logbook that opens the Overview, the log of one trip or the map of
-that trip by itself right after loading: the simulator cannot be tapped from a script, and what the app shows is the logbook's
-own page either way.
-
 ## Related repos
 
 - [nmea2log](https://github.com/Ayuus/nmea2log) -- the shared Python core (decoding, trip
