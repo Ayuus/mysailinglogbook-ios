@@ -332,3 +332,47 @@ def test_nothing_is_said_when_the_round_is_not_overdue(tmp_path):
     controller.on_app_became_active()
 
     assert not any(line.startswith("[warning]") for line in controller.app.logs)
+
+
+def _dutch(monkeypatch):
+    from mysailinglogbook import translations
+
+    monkeypatch.setattr(translations, "_LANGUAGE", "nl")
+
+
+def test_opening_the_app_says_it_is_looking_for_the_w2k2_at_once(tmp_path, monkeypatch):
+    _dutch(monkeypatch)
+    controller = make_controller(tmp_path)
+    controller._probe_subnet = lambda subnet: (False, False)
+    controller.start()
+
+    controller.on_app_became_active()
+
+    assert any("ik zoek nu meteen naar de W2K-2" in line for line in controller.app.logs)
+
+
+def test_opening_the_app_says_when_the_w2k2_is_not_reachable_and_when_it_tries_next(tmp_path, monkeypatch):
+    _dutch(monkeypatch)
+    controller = make_controller(tmp_path)
+    controller._probe_subnet = lambda subnet: (False, False)
+    controller.start()
+    controller.app.logs.clear()
+
+    controller.on_app_became_active()
+
+    not_found = [line for line in controller.app.logs if "niet bereikbaar" in line]
+    assert len(not_found) == 1 and "volgende poging om" in not_found[0]
+
+
+def test_opening_the_app_with_the_w2k2_in_reach_starts_a_round_and_says_nothing_about_not_found(tmp_path, monkeypatch):
+    _dutch(monkeypatch)
+    controller = make_controller(tmp_path)  # the probe finds the W2K-2 with new files
+    controller._probe_subnet = lambda subnet: (False, False)
+    controller.start()
+    controller._probe_subnet = lambda subnet: (True, True)
+    controller.app.logs.clear()
+
+    controller.on_app_became_active()
+
+    assert not any("niet bereikbaar" in line for line in controller.app.logs)
+    assert any(line for line in controller.app.logs if "[info]" in line and "ronde" in line.lower())

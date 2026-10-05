@@ -105,6 +105,8 @@ class BootModeController:
         self._bg_task = None
         self._pending_work = 0
         self._next_wake_ms: Optional[int] = None
+        # Set while the app has just been opened and the probe it started has not reported yet (see on_app_became_active()).
+        self._catching_up = False
         # Seams for the tests: how work gets onto a thread, and the iOS calls.
         self._spawn = lambda target: threading.Thread(target=target, daemon=True).start()
         if native is None:
@@ -190,7 +192,13 @@ class BootModeController:
         if not self.active or self._pending_work > 0 or self.busy or self.machine.state.working is not None:
             return
         self._log_missed_background_round()
+        # Said out loud, and what came of it said afterwards (see _on_probe_result()): trying at once leaves no trace
+        # in the log when the W2K-2 is simply not on this network, which reads as "nothing happened".
+        self._catching_up = True
+        self.app.log("[info] " + t("boat_catch_up_looking"))
         self._on_tick_fired()
+        if self._pending_work == 0:
+            self._catching_up = False  # nothing was started (the machine was busy): no result to report
 
     def _log_missed_background_round(self) -> None:
         """The log would otherwise say nothing about rounds that never ran: when the app is opened and the planned
@@ -281,9 +289,18 @@ class BootModeController:
 
     def _on_probe_result(self, found: bool, has_new_files: bool) -> None:
         self._pending_work -= 1
+        catching_up, self._catching_up = self._catching_up, False
         self._handle(
             self.machine.handle(ProbeResult(at=self._now_ms(), found=found, has_new_files=has_new_files))
         )
+        if not catching_up:
+            return
+        if not found:
+            if self._next_wake_ms is not None:
+                next_text = time.strftime("%H:%M", time.localtime(self._next_wake_ms / 1000))
+                self.app.log("[info] " + t("boat_catch_up_not_found", next=next_text))
+        elif self._pending_work == 0:
+            self.app.log("[info] " + t("boat_catch_up_nothing_new"))  # reachable, and no round was started
 
     # -- round ----------------------------------------------------------------------------------
 
