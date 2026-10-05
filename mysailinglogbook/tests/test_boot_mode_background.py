@@ -299,7 +299,7 @@ def test_opening_the_app_says_so_when_the_planned_round_never_ran(tmp_path, monk
     controller.on_app_became_active()
 
     warning = [line for line in controller.app.logs if line.startswith("[warning]")]
-    assert len(warning) == 1 and "niet in de achtergrond uitgevoerd" in warning[0]
+    assert len(warning) == 1 and "is niet uitgevoerd" in warning[0]
 
 
 def test_the_reason_is_given_when_low_power_mode_is_on(tmp_path, monkeypatch):

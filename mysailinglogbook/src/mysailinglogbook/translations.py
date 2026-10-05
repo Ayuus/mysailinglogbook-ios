@@ -60,10 +60,10 @@ _STRINGS = {
     },
     "boat_bg_missed": {
         # {planned} substituted at call time (HH:MM).
-        "en": "Boat mode: the {planned} round did not run in the background.",
-        "nl": "Boot-modus: de ronde van {planned} is niet in de achtergrond uitgevoerd.",
-        "fr": "Mode bateau : le tour de {planned} n'a pas été exécuté en arrière-plan.",
-        "de": "Bootsmodus: die Runde um {planned} lief nicht im Hintergrund.",
+        "en": "Boat mode: the {planned} round did not run.",
+        "nl": "Boot-modus: de ronde van {planned} is niet uitgevoerd.",
+        "fr": "Mode bateau : le tour de {planned} n'a pas été exécuté.",
+        "de": "Bootsmodus: die Runde um {planned} lief nicht.",
     },
     "boat_catch_up_nothing_new": {
         "en": "Boat mode: W2K-2 reachable, no new files.",
