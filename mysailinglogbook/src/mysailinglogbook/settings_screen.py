@@ -22,67 +22,20 @@ comparison identifier (t() is deterministic per process, so this is safe).
 from __future__ import annotations
 
 import toga
-from rubicon.objc import SEL, Block, CGPoint, CGRect, CGSize, NSObject, ObjCClass, UIEdgeInsetsMake, objc_id, objc_method, objc_property
 from toga.dialogs import ConfirmDialog, InfoDialog
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
 from nmea2log import app_settings
 
+from . import native_ui
 from .settings_store import DEFAULT_MIN_STOP_MINUTES, DEFAULT_SFTP_PORT
 from .translations import t
 
-_NSNotificationCenter = ObjCClass("NSNotificationCenter")
-_NSString = ObjCClass("NSString")
-_UIToolbar = ObjCClass("UIToolbar")
-_UIBarButtonItem = ObjCClass("UIBarButtonItem")
-
-# UIBarButtonSystemItem raw values (not exposed as named constants in toga_iOS / rubicon-objc): .done and
-# .flexibleSpace.
-_BAR_BUTTON_DONE = 0
-_BAR_BUTTON_FLEXIBLE_SPACE = 5
-# A choice in a picker closes it this long after the last change (a wheel reports every row it settles on).
-_PICKER_CLOSE_DELAY_S = 1.2
-
-
-class _PickerDoneTarget(NSObject):
-    """The target of the "Gereed" button above a picker: ends the editing of the field that shows it."""
-
-    field = objc_property(object, weak=True)
-
-    @objc_method
-    def done_(self, sender) -> None:
-        self.field.resignFirstResponder()
-
 # What the form leaves free on each side of the screen (Pack margin=16 on the form box).
 _FORM_MARGIN = 16
-# A Switch with no text of its own: the control (~52pt) plus the stack's spacing (10), and some room to spare:
-# a label that just fits would still push the row wider than the screen (seen on an iPhone 17).
-_SWITCH_WIDTH = 61 + 24
 # The "Clear" button of a cache row plus the gap before it, and the same room to spare.
 _CACHE_BUTTON_WIDTH = 72 + 8 + 16
 
-
-def _text_width(text: str, font) -> float:
-    """How wide iOS draws ``text`` in ``font``, on one line."""
-    return float(_NSString.stringWithString(text).sizeWithAttributes({"NSFont": font}).width)
-
-
-def _wrap_to_width(text: str, font, max_width: float) -> str:
-    """``text`` with line breaks added between words so no line is wider than ``max_width``. Toga's iOS Label
-    never word-wraps (it clips: a long label ran off the right edge of an iPhone 12), but it does show the
-    lines of a text with newlines in it."""
-    lines = []
-    for paragraph in text.split("\n"):
-        current = ""
-        for word in paragraph.split(" "):
-            candidate = word if not current else current + " " + word
-            if current and _text_width(candidate, font) > max_width:
-                lines.append(current)
-                current = word
-            else:
-                current = candidate
-        lines.append(current)
-    return "\n".join(lines)
 
 _BOOT_INTERVAL_MINUTES = list(app_settings.BOOT_INTERVAL_CHOICES)
 _BOOT_INTERVAL_KEYS = ["boat_interval_30", "boat_interval_60", "boat_interval_120", "boat_interval_180"]
@@ -145,7 +98,7 @@ class SettingsScreen:
         else:
             self.publish_method_selection.value = self._publish_none
         self.publish_method_selection.on_change = self._update_publish_method_visibility
-        self._closing_picker(self.publish_method_selection)
+        native_ui.closing_picker(self.publish_method_selection, self.app.loop)
         form.add(self.publish_method_selection)
 
         self.wordpress_box = toga.Box(style=Pack(direction=COLUMN))
@@ -193,7 +146,7 @@ class SettingsScreen:
 
         self._section_header(form, t("section_boat_mode"))
         form.add(self._wrapped_label(t("label_boat_interval"), style=Pack(margin_top=8)))
-        self.boot_interval_selection = self._closing_picker(toga.Selection(items=boot_interval_labels))
+        self.boot_interval_selection = native_ui.closing_picker(toga.Selection(items=boot_interval_labels), self.app.loop)
         try:
             index = _BOOT_INTERVAL_MINUTES.index(self.store.boot_round_interval_minutes)
         except ValueError:
@@ -242,7 +195,7 @@ class SettingsScreen:
         self._theme_dark = t("radio_theme_dark")
         self._theme_system = t("radio_theme_system")
         theme_options = [self._theme_light, self._theme_dark, self._theme_system]
-        self.theme_selection = self._closing_picker(toga.Selection(items=theme_options, style=Pack(margin_top=8)))
+        self.theme_selection = native_ui.closing_picker(toga.Selection(items=theme_options, style=Pack(margin_top=8)), self.app.loop)
         self.theme_selection.value = {
             "light": self._theme_light,
             "dark": self._theme_dark,
@@ -289,122 +242,42 @@ class SettingsScreen:
         button_row_divider = toga.Box(style=Pack(height=1, background_color="#C6C6C8"))
 
         self.content = toga.Box(children=[scroll, button_row_divider, button_row], style=Pack(direction=COLUMN))
-        self._install_keyboard_avoidance(scroll)
+        self._keyboard_avoidance = native_ui.KeyboardAvoidance(scroll)
 
     # -- small widget-building helpers, same role as SettingsActivity.kt's own field()/
     # sectionHeader()/checkbox() local functions --
 
-    def _closing_picker(self, selection):
-        """Makes the picker of a toga.Selection (a wheel in place of the keyboard) go away by itself: a "Gereed"
-        button above it, and closing a moment after a choice. Before, it stayed up until the user tapped
-        elsewhere and covered the Annuleren / Opslaan buttons below the form. Returns the selection."""
-        field = selection._impl.native
-        target = _PickerDoneTarget.alloc().init()
-        target.field = field
-        selection._done_target = target  # the bar button does not retain its target
-        done = _UIBarButtonItem.alloc().initWithBarButtonSystemItem(_BAR_BUTTON_DONE, target=target, action=SEL("done:"))
-        space = _UIBarButtonItem.alloc().initWithBarButtonSystemItem(_BAR_BUTTON_FLEXIBLE_SPACE, target=None, action=None)
-        toolbar = _UIToolbar.alloc().initWithFrame(CGRect(CGPoint(0, 0), CGSize(0, 44)))
-        toolbar.setItems([space, done])
-        field.inputAccessoryView = toolbar
-
-        previous = selection.on_change
-        pending = {"handle": None}
-
-        def _on_change(widget, **kwargs) -> None:
-            if previous is not None:
-                previous(widget)
-            if pending["handle"] is not None:
-                pending["handle"].cancel()
-            pending["handle"] = self.app.loop.call_later(_PICKER_CLOSE_DELAY_S, field.resignFirstResponder)
-
-        selection.on_change = _on_change
-        return selection
+    def _available_width(self, reserved=0) -> float:
+        """The width the screen leaves for a label: the window minus the margins of the form and ``reserved`` for a
+        control next to it."""
+        return native_ui.window_width(self.app) - 2 * _FORM_MARGIN - reserved
 
     def _wrapped_label(self, text, reserved=0, style=None):
-        """A Label whose text is broken into lines that fit the screen: ``reserved`` is the width a control
-        next to it takes."""
-        label = toga.Label(text, style=style)
-        window_width = float(self.app.main_window._impl.native.bounds.size.width)
-        available = window_width - 2 * _FORM_MARGIN - reserved
-        label.text = _wrap_to_width(text, label._impl.native.font, available)
-        return label
+        """A Label whose text is broken into lines that fit the screen (see native_ui.wrapped_label())."""
+        return native_ui.wrapped_label(text, self._available_width(reserved), style=style)
 
     def _field(self, container, label, initial_value, is_password=False, placeholder=None, disable_autofill=False):
         container.add(self._wrapped_label(label, style=Pack(margin_top=8)))
         widget_cls = toga.PasswordInput if is_password else toga.TextInput
         field = widget_cls(value=initial_value, placeholder=placeholder)
-        # Every field here is a technical value (URL, host, username, credential) or a short
-        # proper noun (boat name, call sign) -- not a sentence -- so iOS's default "capitalize
-        # the first letter of what looks like a new sentence" is actively wrong on all of them,
-        # not just occasionally (found in practice, asked for explicitly to fix: it kept
-        # recapitalizing the first character of the WordPress URL while typing). UITextField has
-        # no cross-platform Toga API for this -- set directly on the native field, same pattern as
-        # _template_tint_icon() in app.py. Autocorrection off for the same reason (a "corrected"
-        # URL/hostname/username is just wrong, not helpful); spell-checking off too, since it's
-        # the same red-squiggle mechanism working off the same wrong assumption these are words.
-        native = field._impl.native
-        native.autocapitalizationType = 0  # UITextAutocapitalizationTypeNone
-        native.autocorrectionType = 1  # UITextAutocorrectionTypeNo
-        native.spellCheckingType = 1  # UITextSpellCheckingTypeNo
-        if disable_autofill:
-            # Tells iOS not to guess what kind of field this is at all, so it never offers a
-            # Safari-saved-website/AutoFill suggestion here -- see the WordPress URL field's own
-            # comment on why this matters specifically for that one. "" (a real, empty NSString),
-            # not None/nil -- Apple's own documented way to clear an inferred content type; also
-            # sidesteps whatever rubicon-objc does converting a bare Python None into this
-            # property's Optional<NSString> type, untested and not worth the risk here.
-            native.textContentType = ""
+        native_ui.configure_technical_text_entry(field, disable_autofill)
         container.add(field)
         if is_password:
             self._add_password_toggle(container, field)
         return field
 
     def _add_password_toggle(self, container, field) -> None:
-        """No cross-platform Toga API to reveal a PasswordInput's text -- toggles the native
-        UITextField's own secureTextEntry directly (same _impl.native pattern as the autocap/
-        autocorrect fix above), asked for explicitly (also done for Android's own password
-        fields, via Material's standard end-icon toggle there -- see SettingsActivity.kt's own
-        field()). Reassigning .text to itself right after the toggle works around a well-known
-        UITextField quirk: a secureTextEntry change alone doesn't reliably redraw an
-        already-populated field's current text, only what's typed after the change.
-        """
-        native = field._impl.native
-
-        def _on_change(widget) -> None:
-            native.secureTextEntry = not widget.value
-            native.text = native.text
-
         switch = toga.Switch(t("checkbox_show_password"), value=False, style=Pack(margin_top=4))
-        switch.on_change = _on_change
+        native_ui.attach_secure_entry_toggle(field, switch)
         container.add(switch)
 
     def _switch(self, container, label, initial_value):
-        """A text on the left and a Switch on the right. toga.Switch shows only the first line of its own text
-        (toga-core's setter keeps ``value.split("\\n")[0]``) and a long one pushes the control off the edge of
-        a narrower iPhone, so the text is a separate Label, wrapped to fit, in a row with a Switch that has
-        none; the label dims with the switch (see _set_switch_enabled())."""
-        row = toga.Box(style=Pack(direction=ROW, margin_top=8, align_items="center"))
-        text = self._wrapped_label(label, reserved=_SWITCH_WIDTH, style=Pack(flex=1))
-        switch = toga.Switch("", value=initial_value)
-        row.add(text)
-        row.add(switch)
+        row, switch = native_ui.switch_row(label, initial_value, self._available_width())
         container.add(row)
-        switch._row_label = text
         return switch
-
-    @staticmethod
-    def _set_switch_enabled(switch, enabled: bool) -> None:
-        switch.enabled = enabled
-        switch._row_label._impl.native.enabled = enabled
 
     def _section_header(self, container, text):
         container.add(toga.Label(text, style=Pack(margin_top=20, font_weight="bold", font_size=19)))
-
-    def _round_button_corners(self, button, radius=10) -> None:
-        native = button._impl.native
-        native.layer.cornerRadius = radius
-        native.clipsToBounds = True
 
     def _cache_row(self, container, label_text, on_press):
         """A single cache-clear row: descriptive Label on the left (flex=1, same as any other
@@ -421,58 +294,12 @@ class SettingsScreen:
         button = toga.Button(
             t("button_clear"), on_press=on_press, style=Pack(width=72, height=32, background_color="#E5E5EA")
         )
-        self._round_button_corners(button)
+        native_ui.round_corners(button)
         row.add(button)
         container.add(row)
 
-    def _install_keyboard_avoidance(self, scroll) -> None:
-        """Found in practice: toga_iOS's ScrollContainer/TextInput have no keyboard-avoidance of
-        their own -- with a form this long (W2K-2 login through boat-mode settings), the on-screen
-        keyboard covering a field near the bottom (or the Opslaan/Cancel row below the scroll area
-        entirely) reads as "everything disappeared" the moment you start typing, since there is
-        nothing to scroll the focused field back into view.
-
-        A generous fixed bottom inset while the keyboard is up, rather than reading its exact
-        height out of the notification's userInfo (an NSValue-wrapped CGRect -- an extra struct
-        extraction step over rubicon-objc that isn't needed here), covers every keyboard height in
-        practice; a too-generous inset only ever means a bit of harmless extra empty scroll room,
-        never a hidden field. Observers are removed in _on_cancel()/_on_save() -- this screen is
-        rebuilt fresh every visit (see this module's own doc comment), so leaving them registered
-        would otherwise stack up one more (increasingly redundant, but never wrong on its own)
-        observer per visit.
-
-        Tried also shifting self.content's own bottom margin (so the Opslaan/Cancel row, which
-        lives *outside* the scroll area, would stay clear of a picker covering it too) -- reverted
-        (asked for explicitly, found in practice): that margin change on self.content -- the box
-        holding *both* the scroll area and the button row -- ended up corrupting the scroll area's
-        own layout after opening the publish-method/boat-interval picker, leaving most of the form
-        unreachable (looked like fields had vanished; they were still there, just outside a
-        miscalculated scrollable region). The scroll view's own contentInset alone, below, is
-        narrower in scope and doesn't have this problem -- it just doesn't reach the button row,
-        which is a smaller, already-known gap, not a new one.
-        """
-        native = scroll._impl.native
-
-        def _on_show(_notification: objc_id) -> None:
-            native.contentInset = UIEdgeInsetsMake(0, 0, 300, 0)
-            native.scrollIndicatorInsets = UIEdgeInsetsMake(0, 0, 300, 0)
-
-        def _on_hide(_notification: objc_id) -> None:
-            native.contentInset = UIEdgeInsetsMake(0, 0, 0, 0)
-            native.scrollIndicatorInsets = UIEdgeInsetsMake(0, 0, 0, 0)
-
-        center = _NSNotificationCenter.defaultCenter
-        self._keyboard_show_observer = center.addObserverForName(
-            "UIKeyboardWillShowNotification", object=None, queue=None, usingBlock=Block(_on_show, None, objc_id)
-        )
-        self._keyboard_hide_observer = center.addObserverForName(
-            "UIKeyboardWillHideNotification", object=None, queue=None, usingBlock=Block(_on_hide, None, objc_id)
-        )
-
     def _remove_keyboard_avoidance(self) -> None:
-        center = _NSNotificationCenter.defaultCenter
-        center.removeObserver(self._keyboard_show_observer)
-        center.removeObserver(self._keyboard_hide_observer)
+        self._keyboard_avoidance.remove()
 
     def _update_publish_method_visibility(self, widget):
         # Found in practice: Pack's own "display" property (PACK/NONE) alone isn't enough on
@@ -497,8 +324,8 @@ class SettingsScreen:
         # Same reasoning for both: neither means anything with no publish method chosen -- found
         # in practice, left enabled with "Niet publiceren" picked, they read as real, live
         # settings despite doing nothing at all in that state.
-        self._set_switch_enabled(self.boot_publish_every_round_switch, show_wordpress or show_sftp)
-        self._set_switch_enabled(self.auto_publish_switch, show_wordpress or show_sftp)
+        native_ui.set_switch_enabled(self.boot_publish_every_round_switch, show_wordpress or show_sftp)
+        native_ui.set_switch_enabled(self.auto_publish_switch, show_wordpress or show_sftp)
 
     async def _on_clear_data_cache(self, widget):
         confirmed = await self.app.main_window.dialog(

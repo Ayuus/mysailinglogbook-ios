@@ -11,7 +11,6 @@ import time
 from pathlib import Path
 
 import toga
-from rubicon.objc import Block, CGPoint, NSObject, NSRange, ObjCClass, ObjCInstance, ObjCProtocol, objc_method
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
 from nmea2log import android_entry, app_constants, import_ebl, run_outcome
@@ -19,12 +18,11 @@ from nmea2log import log as nmea_log
 from nmea2log.upload import UploadError, normalize_rest_upload_url, upload_via_rest
 
 from .boot_mode_controller import BootModeController
+from . import native_ui
 from .network import detect_subnet_prefix
 from .settings_screen import SettingsScreen
 from .settings_store import SettingsStore
 from .translations import t
-
-_UIApplication = ObjCClass("UIApplication")
 
 # Only a guard against a service running for days: the log view appends lines to its text (see
 # MySailingLogbook.log()) instead of rebuilding it, so a long log costs memory, not time. When more than
@@ -40,120 +38,6 @@ _LOG_FLUSH_INTERVAL_S = app_constants.LOG_REFRESH_INTERVAL_MS / 1000
 
 # MainActivity.kt's own collapsed log height after a run (150dp), see _show_logbook_with_log_strip().
 _LOG_STRIP_HEIGHT = app_constants.LOG_STRIP_HEIGHT
-
-_UIView = ObjCClass("UIView")
-_UIFont = ObjCClass("UIFont")
-_NSAttributedString = ObjCClass("NSAttributedString")
-_NSMutableAttributedString = ObjCClass("NSMutableAttributedString")
-_UIColor = ObjCClass("UIColor")
-# Standard UIKit UIViewAnimationOptions bit values (not exposed as named constants anywhere in
-# toga_iOS -- these are stable, documented Apple values, safe to hardcode).
-_UI_VIEW_ANIMATION_OPTION_REPEAT = 1 << 3
-_UI_VIEW_ANIMATION_OPTION_AUTOREVERSE = 1 << 4
-# UIImageRenderingMode.alwaysTemplate -- same reasoning as the animation options above.
-_UI_IMAGE_RENDERING_MODE_ALWAYS_TEMPLATE = 2
-
-_UIDocumentPickerViewController = ObjCClass("UIDocumentPickerViewController")
-_UTType = ObjCClass("UTType")
-_UIDocumentPickerDelegate = ObjCProtocol("UIDocumentPickerDelegate")
-
-class _ImportDocumentPickerDelegate(NSObject, protocols=[_UIDocumentPickerDelegate]):
-    """UIDocumentPickerViewController's own delegate, defined here via rubicon-objc's custom-
-    Objective-C-class support -- Toga has no folder picker on iOS of its own (toga_iOS.dialogs'
-    SelectFolderDialog/OpenFileDialog are both not_implemented() stubs, checked directly), so this
-    talks to UIKit the same way idle-timer/UIFileSharingEnabled already do elsewhere in this file:
-    directly, not a workaround.
-
-    app_ref is set by on_import() right after alloc().init(), the only place to stash a reference
-    back to the running MySailingLogbook instance -- an instance of this class is otherwise
-    indistinguishable from any other bare NSObject to Python. Held as self._import_picker_delegate
-    on the app too, for the same reason UIKit delegates are conventionally kept alive by their
-    owner: UIDocumentPickerViewController's own delegate property does not retain it."""
-
-    @objc_method
-    def documentPicker_didPickDocumentsAtURLs_(self, controller, urls) -> None:
-        url = ObjCInstance(urls).objectAtIndex(0)
-        self.app_ref.on_folder_picked(url)
-
-    @objc_method
-    def documentPickerWasCancelled_(self, controller) -> None:
-        pass
-
-
-def _template_tint_icon(button) -> None:
-    """toga_iOS's own Button.set_icon() (toga_iOS/widgets/button.py) sets the icon image with
-    UIKit's default rendering mode, which keeps every pixel exactly as rasterized -- solid black,
-    same as Android's vector drawables before tinting. That's invisible against a dark toolbar
-    background, found in practice testing "Apparaat volgen"/"Donker" (see apply_theme_mode()):
-    the title text next to these buttons already adapts automatically (UIKit's own dynamic label
-    color), but the icons didn't move at all.
-
-    Re-applying the same image in "always template" mode instead makes UIKit ignore its own
-    pixels and paint the shape using the button's tintColor -- set to UIColor.labelColor here, the
-    same dynamic black-in-light/white-in-dark color the title text already uses, so both switch
-    together.
-    """
-    native = button._impl.native
-    templated = native.imageForState(0).imageWithRenderingMode(_UI_IMAGE_RENDERING_MODE_ALWAYS_TEMPLATE)
-    native.setImage(templated, forState=0)
-    native.tintColor = _UIColor.labelColor()
-
-
-def _set_busy_pulse(button, busy: bool) -> None:
-    """Same "something is happening" pulse as Android's own setBusyAppearance() (alpha 1.0 <->
-    0.35, 1500ms each way, repeating indefinitely while busy -- see MainActivity.kt's own doc
-    comment on the exact timing choice). Ported directly against UIKit via rubicon-objc instead
-    of through any Toga cross-platform API -- Toga has no generic opacity-animation concept, and
-    Android's own version is itself platform-native code (a plain ObjectAnimator), not something
-    to abstract over; this is the iOS-native equivalent of the same thing, not a workaround.
-    """
-    native = button._impl.native
-    if busy:
-        def _dim():
-            native.alpha = 0.35
-
-        _UIView.animateWithDuration(
-            1.5,
-            delay=0.0,
-            options=_UI_VIEW_ANIMATION_OPTION_REPEAT | _UI_VIEW_ANIMATION_OPTION_AUTOREVERSE,
-            animations=Block(_dim, None),
-            completion=None,
-        )
-    else:
-        native.layer.removeAllAnimations()
-        native.alpha = 1.0
-
-
-def _set_idle_timer_disabled(disabled: bool) -> None:
-    """Keeps the screen from auto-locking while boat mode is on -- asked for explicitly: boat
-    mode is foreground-only (see this repo's own README on why iOS has no equivalent to Android's
-    foreground service), so the app being suspended when the screen locks would stop it just as
-    surely as closing the app would. As long as the phone is left with the screen on (e.g. propped
-    up at the helm) and the app isn't manually switched away from, this keeps it alive indefinitely
-    despite that limitation.
-
-    UIApplication.sharedApplication is a class-side singleton accessor, the same category as
-    NSNotificationCenter.defaultCenter in settings_screen.py -- rubicon-objc resolved that one as
-    an already-invoked property rather than a bound method (found in practice, the hard way: a
-    trailing () there raised "not callable"). Tried as a property first here for the same reason,
-    falling back to calling it if that guess is wrong for this particular selector, and giving up
-    silently rather than crashing boat mode over what is, worst case, just a missed screen-lock
-    prevention rather than a functional failure.
-    """
-    try:
-        _UIApplication.sharedApplication.idleTimerDisabled = disabled
-    except TypeError:
-        try:
-            _UIApplication.sharedApplication().idleTimerDisabled = disabled
-        except Exception:
-            pass
-
-
-def _hex_color(value: str):
-    """A UIColor from a "#RRGGBB" string."""
-    red, green, blue = (int(value[index:index + 2], 16) / 255 for index in (1, 3, 5))
-    return _UIColor.colorWithRed(red, green=green, blue=blue, alpha=1.0)
-
 
 class ProgressCallback:
     """Plays the same role as MainActivity.kt's own SyncController object: the duck-typed
@@ -250,7 +134,7 @@ class MySailingLogbook(toga.App):
             self.boat_mode_button,
             self.settings_button,
         ):
-            _template_tint_icon(button)
+            native_ui.template_tint_icon(button)
 
         toolbar_spacer = toga.Box(style=Pack(flex=1))
         toolbar = toga.Box(
@@ -466,27 +350,6 @@ class MySailingLogbook(toga.App):
         except OSError:
             pass
 
-    def _attributed_log_text(self, lines):
-        """The lines as attributed text: errors in red and warnings in yellow, both bold, like the Android
-        log (app_constants decides which lines are which, and the colours)."""
-        native = self.log_view._impl.native
-        # textColor is nil until something sets it: then the text is drawn in the system label colour.
-        font, color = native.font, native.textColor or _UIColor.labelColor()
-        bold = _UIFont.fontWithDescriptor(font.fontDescriptor.fontDescriptorWithSymbolicTraits(2), size=font.pointSize)
-        error_color = _hex_color(app_constants.LOG_ERROR_COLOR)
-        warning_color = _hex_color(app_constants.LOG_WARNING_COLOR)
-        text = _NSMutableAttributedString.alloc().init()
-        for line in lines:
-            kind = app_constants.classify_line(line)
-            if kind == "error":
-                attributes = {"NSFont": bold, "NSColor": error_color}
-            elif kind == "warning":
-                attributes = {"NSFont": bold, "NSColor": warning_color}
-            else:
-                attributes = {"NSFont": font, "NSColor": color}
-            text.appendAttributedString(_NSAttributedString.alloc().initWithString(line + "\n", attributes=attributes))
-        return text
-
     def _flush_log(self) -> None:
         # Same "only follow along if already at the bottom" behavior as MainActivity's own
         # refreshLogView()/isLogScrolledToBottom(): checked *before* the text changes, so a user
@@ -499,11 +362,11 @@ class MySailingLogbook(toga.App):
         storage = native.textStorage
         if self._log_rebuild or self._log_shown == 0 or storage.length() == 0:
             # The first lines, or after lines were dropped from the front.
-            native.attributedText = self._attributed_log_text(self._log_lines)
+            native.attributedText = native_ui.attributed_log_text(native, self._log_lines)
             self._log_rebuild = False
         elif self._log_shown < len(self._log_lines):
             # Appended to the existing text.
-            storage.appendAttributedString(self._attributed_log_text(self._log_lines[self._log_shown:]))
+            storage.appendAttributedString(native_ui.attributed_log_text(native, self._log_lines[self._log_shown:]))
         self._log_shown = len(self._log_lines)
         if was_at_bottom:
             self._scroll_log_to_bottom()
@@ -514,22 +377,8 @@ class MySailingLogbook(toga.App):
         # while the log is growing.
         native.flashScrollIndicators()
 
-    def _lay_out_log(self) -> None:
-        """UIKit lays a UITextView's text out lazily, so right after the text changes its contentSize
-        is still the old one -- which is what made both the was-at-bottom check and the scroll to the
-        end come out wrong. Forces the layout of the end of the text now: only that, not the whole log,
-        so it costs the same however long the log is."""
-        native = self.log_view._impl.native
-        length = native.textStorage.length()
-        start = max(length - _LOG_TAIL_LAYOUT_CHARS, 0)
-        native.layoutManager.ensureLayoutForCharacterRange(NSRange(start, length - start))
-        native.layoutIfNeeded()
-
     def _scroll_log_to_bottom(self) -> None:
-        native = self.log_view._impl.native
-        self._lay_out_log()
-        end = native.contentSize.height - native.bounds.size.height + native.adjustedContentInset.bottom
-        native.contentOffset = CGPoint(0, max(end, 0))
+        native_ui.scroll_to_bottom(self.log_view._impl.native, _LOG_TAIL_LAYOUT_CHARS)
 
     def _scroll_log_to_bottom_soon(self) -> None:
         """For when the log view is about to change size (shown again, or shrunk to a strip): once now
@@ -539,12 +388,7 @@ class MySailingLogbook(toga.App):
         self.log_view._impl.native.flashScrollIndicators()
 
     def _log_is_scrolled_to_bottom(self) -> bool:
-        native = self.log_view._impl.native
-        # A few points of slack, same reasoning as Android's own 4dp: scroll position/content
-        # height can be off by a rounding point or two even while visually "at the bottom".
-        slack = 4
-        end = native.contentSize.height + native.adjustedContentInset.bottom
-        return native.contentOffset.y + native.bounds.size.height >= end - slack
+        return native_ui.is_scrolled_to_bottom(self.log_view._impl.native)
 
     def ebl_dir(self) -> Path:
         """Where downloaded/local .ebl files live -- same folder name as Android's own
@@ -613,20 +457,11 @@ class MySailingLogbook(toga.App):
         # log is where every outcome below shows up, including "picked nothing" (cancelled).
         self.showing_local_logbook = False
         self._show_log_content()
-        folder_type = _UTType.typeWithIdentifier("public.folder")
-        picker = _UIDocumentPickerViewController.alloc().initForOpeningContentTypes([folder_type])
-        # Held on self, not just a local -- UIDocumentPickerViewController's own delegate property
-        # does not retain it (see _ImportDocumentPickerDelegate's own doc comment); without this,
-        # nothing else keeps the delegate alive until the picker actually calls back.
-        self._import_picker_delegate = _ImportDocumentPickerDelegate.alloc().init()
-        self._import_picker_delegate.app_ref = self
-        picker.delegate = self._import_picker_delegate
-        toga.App.app.current_window._impl.native.rootViewController.presentViewController(
-            picker, animated=True, completion=None
-        )
+        # Held on self, not just a local: the picker's delegate is not retained by UIKit (see native_ui).
+        self._import_picker_delegate = native_ui.present_folder_picker(self)
 
     def on_folder_picked(self, url) -> None:
-        """_ImportDocumentPickerDelegate's own callback once a folder is picked -- always runs on
+        """native_ui.FolderPickerDelegate's callback once a folder is picked -- always runs on
         the main thread (UIKit delegate callbacks do), so _start_background() itself is safe to
         call directly from here, same as any toolbar button's on_press."""
         self._start_background(self._run_import, url, busy_button=self.import_button)
@@ -908,8 +743,8 @@ class MySailingLogbook(toga.App):
         self.boat_mode_button.icon = toga.Icon(
             "resources/sailboat_filled" if active else "resources/sailboat"
         )
-        _template_tint_icon(self.boat_mode_button)
-        _set_idle_timer_disabled(active)
+        native_ui.template_tint_icon(self.boat_mode_button)
+        native_ui.set_idle_timer_disabled(active)
 
     def on_settings(self, widget):
         self.show_settings_screen()
@@ -943,7 +778,7 @@ class MySailingLogbook(toga.App):
             # Left enabled (excluded from the disable loop below) -- pulsing a *disabled* button
             # would fight Toga's own disabled-state dimming, and Android's own equivalent button
             # deliberately stays enabled too (tapping it again cancels, see _cancel_if_running()).
-            _set_busy_pulse(busy_button, True)
+            native_ui.set_busy_pulse(busy_button, True)
         threading.Thread(target=self._run_and_finish, args=(target, args), daemon=True).start()
 
     def _cancel_if_running(self, button) -> bool:
@@ -980,7 +815,7 @@ class MySailingLogbook(toga.App):
         self._set_toolbar_enabled(True)
         self.hide_progress_bar()
         if self._busy_button is not None:
-            _set_busy_pulse(self._busy_button, False)
+            native_ui.set_busy_pulse(self._busy_button, False)
             self._busy_button = None
 
     def _publish_configured(self) -> bool:
