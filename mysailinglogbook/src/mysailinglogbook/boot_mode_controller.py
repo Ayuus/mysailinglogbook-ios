@@ -78,6 +78,8 @@ BACKGROUND_TASK_ID = "com.ayuus.mysailinglogbook.boatmode"
 # When a background task was refused or has no next time, ask for one this long from now.
 _FALLBACK_WAKE_MS = 15 * 60 * 1000
 _STATE_FILE_NAME = "boot_mode_state.json"
+# A planned wake-up this much overdue, seen when the app is opened, means iOS did not run the background task.
+_MISSED_GRACE_MS = 10 * 60 * 1000
 
 
 class BootModeController:
@@ -187,7 +189,21 @@ class BootModeController:
         is running already."""
         if not self.active or self._pending_work > 0 or self.busy or self.machine.state.working is not None:
             return
+        self._log_missed_background_round()
         self._on_tick_fired()
+
+    def _log_missed_background_round(self) -> None:
+        """The log would otherwise say nothing about rounds that never ran: when the app is opened and the planned
+        wake-up is long overdue, iOS did not start the background task -- say so, and why when that is known."""
+        planned = self._next_wake_ms
+        if planned is None or self._now_ms() - planned < _MISSED_GRACE_MS:
+            return
+        planned_text = time.strftime("%H:%M", time.localtime(planned / 1000))
+        self.app.log("[warning] " + t("boat_bg_missed", planned=planned_text))
+        if self._native.low_power_mode_enabled():
+            self.app.log("[info] " + t("boat_bg_low_power"))
+        elif not self._native.background_refresh_available():
+            self.app.log("[info] " + t("boat_bg_refresh_off"))
 
     def _handle(self, actions) -> None:
         for action in actions:

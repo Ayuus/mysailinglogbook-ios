@@ -392,7 +392,8 @@ _kept_blocks: list = []
 
 
 def observe_app_became_active(callback) -> None:
-    """Calls ``callback()`` every time the app becomes active (at launch, and each time it is opened again)."""
+    """Calls ``callback()`` every time the app becomes active (at launch -- at once when it is active already -- and each
+    time it is opened again)."""
 
     def _active(_notification: objc_id) -> None:
         callback()
@@ -402,6 +403,13 @@ def observe_app_became_active(callback) -> None:
     _NSNotificationCenter.defaultCenter.addObserverForName(
         "UIApplicationDidBecomeActiveNotification", object=None, queue=None, usingBlock=block
     )
+    # Toga starts the app a moment after launch: it may have become active already, and the notification is not repeated.
+    try:
+        state = _UIApplication.sharedApplication.applicationState
+    except Exception:
+        state = _UIApplication.sharedApplication().applicationState
+    if int(state) == 0:  # UIApplicationStateActive
+        callback()
 
 
 # -- background tasks and local notifications -----------------------------------------------------------------------
@@ -475,6 +483,27 @@ def set_background_task_expiration(task, handler) -> None:
 
 def complete_background_task(task, success: bool) -> None:
     task.setTaskCompletedWithSuccess(success)
+
+
+def low_power_mode_enabled() -> bool:
+    """Whether Low Power Mode is on: iOS runs no background tasks then."""
+    try:
+        return bool(ObjCClass("NSProcessInfo").processInfo.isLowPowerModeEnabled)
+    except Exception:
+        return False
+
+
+def background_refresh_available() -> bool:
+    """Whether the user allows this app to run in the background (Settings > General > Background App Refresh, or
+    restricted by a profile): UIBackgroundRefreshStatus .available is 2."""
+    try:
+        status = _UIApplication.sharedApplication.backgroundRefreshStatus
+    except Exception:
+        try:
+            status = _UIApplication.sharedApplication().backgroundRefreshStatus
+        except Exception:
+            return True
+    return int(status) == 2
 
 
 def request_notification_permission() -> None:

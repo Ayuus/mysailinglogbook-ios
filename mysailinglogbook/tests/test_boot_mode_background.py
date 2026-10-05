@@ -106,6 +106,15 @@ class FakeNative:
     def request_notification_permission(self):
         self.permission_requests += 1
 
+    low_power = False
+    refresh_available = True
+
+    def low_power_mode_enabled(self):
+        return self.low_power
+
+    def background_refresh_available(self):
+        return self.refresh_available
+
     def post_local_notification(self, identifier, title, body):
         self.notifications.append((identifier, title, body))
 
@@ -271,3 +280,56 @@ def test_opening_the_app_with_the_mode_off_does_nothing(tmp_path):
     controller.on_app_became_active()
 
     assert started == []
+
+
+def _overdue_controller(tmp_path, minutes_late):
+    controller = make_controller(tmp_path)
+    controller._probe_subnet = lambda subnet: (False, False)
+    controller.start()
+    controller._spawn = lambda target: None
+    controller._next_wake_ms = controller._now_ms() - minutes_late * 60 * 1000
+    return controller
+
+
+def test_opening_the_app_says_so_when_the_planned_round_never_ran(tmp_path, monkeypatch):
+    from mysailinglogbook import translations
+
+    monkeypatch.setattr(translations, "_LANGUAGE", "nl")
+    controller = _overdue_controller(tmp_path, minutes_late=90)
+
+    controller.on_app_became_active()
+
+    warning = [line for line in controller.app.logs if line.startswith("[warning]")]
+    assert len(warning) == 1 and "niet in de achtergrond uitgevoerd" in warning[0]
+
+
+def test_the_reason_is_given_when_low_power_mode_is_on(tmp_path, monkeypatch):
+    from mysailinglogbook import translations
+
+    monkeypatch.setattr(translations, "_LANGUAGE", "nl")
+    controller = _overdue_controller(tmp_path, minutes_late=90)
+    controller._native.low_power = True
+
+    controller.on_app_became_active()
+
+    assert any("Spaarstand" in line for line in controller.app.logs)
+
+
+def test_the_reason_is_given_when_background_refresh_is_off(tmp_path, monkeypatch):
+    from mysailinglogbook import translations
+
+    monkeypatch.setattr(translations, "_LANGUAGE", "nl")
+    controller = _overdue_controller(tmp_path, minutes_late=90)
+    controller._native.refresh_available = False
+
+    controller.on_app_became_active()
+
+    assert any("Achtergrondverversing" in line for line in controller.app.logs)
+
+
+def test_nothing_is_said_when_the_round_is_not_overdue(tmp_path):
+    controller = _overdue_controller(tmp_path, minutes_late=2)
+
+    controller.on_app_became_active()
+
+    assert not any(line.startswith("[warning]") for line in controller.app.logs)
