@@ -525,7 +525,7 @@ class MySailingLogbook(toga.App):
             self._show_log_content()
             self.log("[info] " + t("log_fill_publish_settings"))
             return
-        self.log("[info] " + t("status_building_with_existing_data"))
+        self.log("[info] " + t("status_checking_logbook"))
         self._start_background(self._run_build_and_publish, busy_button=self.publish_button)
 
     def _run_build_and_publish(self) -> None:
