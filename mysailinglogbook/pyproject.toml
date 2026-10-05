@@ -2,7 +2,7 @@
 [tool.briefcase]
 project_name = "My Sailing Logbook"
 bundle = "com.ayuus"
-version = "1.1.8"
+version = "1.1.9"
 url = "https://ayuus.com"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
