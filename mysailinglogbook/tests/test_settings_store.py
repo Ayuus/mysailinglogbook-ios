@@ -89,6 +89,26 @@ def test_is_rest_upload_config_complete_needs_all_three_fields(tmp_path):
     assert store.is_rest_upload_config_complete is True
 
 
+def test_switching_publishing_off_keeps_the_wordpress_details(tmp_path):
+    store = SettingsStore(tmp_path)
+    store.update(rest_upload_url="https://x/wp-json/nmea2log/v1/logbook", rest_upload_user="u", rest_upload_password="p")
+    assert store.is_publish_configured is True
+
+    store.update(publish_enabled=False)
+
+    assert store.is_publish_configured is False
+    assert (store.rest_upload_url, store.rest_upload_user, store.rest_upload_password) == (
+        "https://x/wp-json/nmea2log/v1/logbook", "u", "p")
+    store.update(publish_enabled=True)
+    assert store.is_publish_configured is True
+
+
+def test_an_older_settings_file_with_the_details_goes_on_publishing(tmp_path):
+    (tmp_path / "settings.json").write_text('{"rest_upload_url": "https://x", "rest_upload_user": "u", "rest_upload_password": "p"}')
+
+    assert SettingsStore(tmp_path).is_publish_configured is True
+
+
 def test_settings_of_an_older_version_with_sftp_keys_still_load(tmp_path):
     (tmp_path / "settings.json").write_text('{"w2k2_user": "admin", "sftp_host": "example.com"}')
 

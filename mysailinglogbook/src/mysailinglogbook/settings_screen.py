@@ -92,7 +92,7 @@ class SettingsScreen:
 
         form.add(self._wrapped_label(t("label_publish_method"), style=Pack(margin_top=8)))
         self.publish_method_selection = toga.Selection(items=publish_options)
-        if self.store.is_rest_upload_config_complete:
+        if self.store.is_publish_configured:
             self.publish_method_selection.value = self._publish_wordpress
         else:
             self.publish_method_selection.value = self._publish_none
@@ -403,17 +403,14 @@ class SettingsScreen:
             }[self.theme_selection.value],
         }
 
-        # Only saved when WordPress is the picked method -- otherwise the fields are cleared, same
-        # reasoning as SettingsActivity.kt's own save handler: the choice is real, not just a display
-        # filter.
-        if self.publish_method_selection.value == self._publish_wordpress:
-            fields.update(
-                rest_upload_url=self.rest_url_field.value.strip(),
-                rest_upload_user=self.rest_user_field.value.strip(),
-                rest_upload_password=self.rest_password_field.value,
-            )
-        else:
-            fields.update(rest_upload_url="", rest_upload_user="", rest_upload_password="")
+        # The details are always saved as typed, and the choice only says whether publishing is on -- picking
+        # "don't publish" must not wipe them (same as SettingsActivity.kt's own save handler).
+        fields.update(
+            rest_upload_url=self.rest_url_field.value.strip(),
+            rest_upload_user=self.rest_user_field.value.strip(),
+            rest_upload_password=self.rest_password_field.value,
+            publish_enabled=self.publish_method_selection.value == self._publish_wordpress,
+        )
 
         self.store.update(**fields)
         self.app.apply_theme_mode()

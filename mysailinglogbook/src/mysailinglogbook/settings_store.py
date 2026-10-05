@@ -108,6 +108,19 @@ class SettingsStore:
         return app_settings.is_rest_complete(self.rest_upload_url, self.rest_upload_user, self.rest_upload_password)
 
     @property
+    def publish_enabled(self) -> bool:
+        """Whether publishing is switched on ("WordPress" picked in Settings), kept apart from the WordPress details:
+        picking "don't publish" must not wipe them."""
+        return self._values["publish_enabled"]
+
+    @property
+    def is_publish_configured(self) -> bool:
+        """Publishing is on and the details are all there -- what every "can this be published" check asks."""
+        return app_settings.is_publish_configured(
+            self.publish_enabled, self.rest_upload_url, self.rest_upload_user, self.rest_upload_password
+        )
+
+    @property
     def boot_round_interval_minutes(self) -> int:
         return self._values["boot_round_interval_minutes"]
 

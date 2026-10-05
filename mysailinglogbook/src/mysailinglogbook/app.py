@@ -520,7 +520,7 @@ class MySailingLogbook(toga.App):
             self.log("[info] " + t("log_publish_already_running"))
             return
         store = self.settings_store
-        if not store.is_rest_upload_config_complete:
+        if not store.is_publish_configured:
             self.showing_local_logbook = False
             self._show_log_content()
             self.log("[info] " + t("log_fill_publish_settings"))
@@ -551,7 +551,7 @@ class MySailingLogbook(toga.App):
         nothing set up to publish to is not a failure, only an upload that was attempted and failed)."""
         published = self._publish_logbook()
         store = self.settings_store
-        return run_outcome.publish_failed(published, store.is_rest_upload_config_complete)
+        return run_outcome.publish_failed(published, store.is_publish_configured)
 
     def _publish_logbook(self) -> bool:
         """The actual upload step, run on the same background thread as the build above -- see
@@ -567,7 +567,7 @@ class MySailingLogbook(toga.App):
         view, nothing was published either way).
         """
         store = self.settings_store
-        use_rest = store.is_rest_upload_config_complete
+        use_rest = store.is_publish_configured
         if use_rest:
             # Expanded here, not stored expanded -- see settings_screen.py's own comment on the
             # rest_url_field for why: the Settings field always shows exactly what was typed, and
@@ -822,7 +822,7 @@ class MySailingLogbook(toga.App):
 
     def _publish_configured(self) -> bool:
         store = self.settings_store
-        return store.is_rest_upload_config_complete
+        return store.is_publish_configured
 
     def update_publish_button_enabled(self) -> None:
         """Publish is only usable once WordPress is filled in (MainActivity.updatePublishButtonEnabled()):

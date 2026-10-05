@@ -137,7 +137,7 @@ class BootModeController:
             final_on_left_boat=store.boot_final_on_left_boat,
             left_boat_minutes=store.boot_left_boat_minutes,
             stop_after_final=store.boot_stop_after_final,
-            publish_configured=store.is_rest_upload_config_complete,
+            publish_configured=store.is_publish_configured,
         )
 
     def start(self) -> None:
