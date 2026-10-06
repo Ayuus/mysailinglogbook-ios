@@ -1,8 +1,8 @@
 # My Sailing Logbook (iOS)
 
-iOS counterpart to [mysailinglogbook-android](https://github.com/Ayuus/mysailinglogbook-android): syncs
+iOS counterpart to [mysailinglogbook-android](https://github.com/Ayuus/mysailinglogbook-android): downloads
 voyage data from a boat's [Actisense W2K-2](https://actisense.com) NMEA 2000-to-WiFi gateway,
-builds the same HTML sailing logbook the desktop [nmea2log](https://github.com/Ayuus/nmea2log)
+assembles the same HTML sailing logbook the desktop [nmea2log](https://github.com/Ayuus/nmea2log)
 CLI produces, shows it in-app, and (optionally) publishes it to a WordPress site --
 same feature set as the Android app, same underlying `nmea2log` Python package, different
 platform.
@@ -25,7 +25,7 @@ on iOS alone and merges the shared ones in. Change a shared wording there once; 
 
 ## Status
 
-**Real app; download/build/view/settings/appearance/language/publish/boat mode are all done and
+**Real app; download/assemble/view/settings/appearance/language/publish/boat mode are all done and
 working.** The `mysailinglogbook/` directory in this repo is
 the actual [Briefcase](https://github.com/beeware/briefcase)/[Toga](https://github.com/beeware/toga)
 app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
@@ -40,13 +40,13 @@ app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
   they switch between black and white with Light/Dark mode the same way the title text next to
   them already does -- found in practice: left untinted, they render as solid black regardless of
   appearance, invisible against a dark toolbar.
-- **Download/Build**: call the same `nmea2log.android_entry.build_from_local_files()`/
+- **Download/Assemble**: call the same `nmea2log.android_entry.build_from_local_files()`/
   `sync_from_w2k2()` functions Android calls via Chaquopy -- plain Python calling Python here, no
   language boundary to cross. Runs on a background thread; UI updates marshal onto the main
   thread via `loop.call_soon_threadsafe()`.
 - **View**: toggles the toolbar's content area between the log and a `toga.WebView` showing
   `logbook.html`, same `set_content(root_url, html)` technique as `loadLogbookIntoWebView()`, and
-  the toolbar itself stays visible/usable throughout (including while a sync is running), matching
+  the toolbar itself stays visible/usable throughout (including while a download or assemble is running), matching
   `viewLocalLogbook()`'s own documented behavior.
 - **Settings**: mirrors `SettingsActivity.kt` field-for-field (W2K-2 login, boat identity,
   publish method, boat-mode section, cache-clear buttons, a **Delete** button for the local `.ebl`
@@ -89,7 +89,7 @@ app (`com.ayuus.mysailinglogbook`, same applicationId as Android):
     (`UIApplication.idleTimerDisabled`).
   - In the background iOS runs a `BGProcessingTask` **when iOS decides to** (some time after the time the
     machine asked for -- possibly hours later, not at all in Low Power Mode): the machine gets a `Resume`
-    event, does what is due (look for the W2K-2, download and build, publish) and asks for the next task. A
+    event, does what is due (look for the W2K-2, download and assemble, publish) and asks for the next task. A
     local notification tells what happened. The machine's state is persisted after every step
     (`boot_mode_state.json`), so a task that starts a fresh process, or opening the app again, carries on
     where it was -- and every time the app becomes active it tries right away. The log then says what came of it,
