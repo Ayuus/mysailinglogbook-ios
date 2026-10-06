@@ -26,6 +26,14 @@ real one) -- generated with `examples/generate_demo_logbook.py` in the
 [nmea2log](https://github.com/Ayuus/nmea2log) repo.
 
 <p>
+<img src="docs/screenshots/map-trip.png" width="230" alt="The map of one trip, opened from the Map button in the trip list">
+<img src="docs/screenshots/trip-log.png" width="230" alt="The log of one trip, opened from the Log button">
+<img src="docs/screenshots/map-overview.png" width="230" alt="The overview map of the year, opened from the Overview link">
+</p>
+
+*The maps in the logbook (OpenStreetMap): the **Map** button of a trip shows its route -- its **Log** button the positions, course and speed along the way, with the water temperature and the boat's motion -- the **Overview** link of a year puts all trips of that year on one map.*
+
+<p>
 <img src="docs/screenshots/logbook.png" width="230" alt="The logbook">
 <img src="docs/screenshots/run.png" width="230" alt="After an assemble: the logbook with the log as a strip above it">
 <img src="docs/screenshots/log.png" width="230" alt="The log">
@@ -34,14 +42,6 @@ real one) -- generated with `examples/generate_demo_logbook.py` in the
 *The logbook (what the app shows when it is opened) -- after an assemble, the logbook with the log as a strip above it
 (scroll it, or tap the log button for the whole log) -- the start of the log of such a run: the .ebl files found, the
 trips assembled from them.*
-
-<p>
-<img src="docs/screenshots/map-trip.png" width="230" alt="The map of one trip, opened from the Map button in the trip list">
-<img src="docs/screenshots/trip-log.png" width="230" alt="The log of one trip, opened from the Log button">
-<img src="docs/screenshots/map-overview.png" width="230" alt="The overview map of the year, opened from the Overview link">
-</p>
-
-*The maps in the logbook (OpenStreetMap): the **Map** button of a trip shows its route -- its **Log** button the positions, course and speed along the way, with the water temperature and the boat's motion -- the **Overview** link of a year puts all trips of that year on one map.*
 
 <p>
 <img src="docs/screenshots/settings.png" width="230" alt="Settings: W2K-2, boat, trips, publish">
@@ -199,7 +199,7 @@ it.)
    ```
 4. Run it: for the Simulator, `xcrun simctl install booted <path/to/My Sailing Logbook.app>` and
    `xcrun simctl launch booted com.ayuus.mysailinglogbook` (not `briefcase run`, which wipes the app's data every time --
-   see the gotchas in [docs/design-choices.md](docs/design-choices.md)); for an iPhone, open the generated Xcode project under
+   see the gotchas in [docs/developer-notes.md](docs/developer-notes.md)); for an iPhone, open the generated Xcode project under
    `mysailinglogbook/build/mysailinglogbook/ios/xcode/` and press Run.
 
 Python changes reach the app only through `briefcase update` (and `-r` after a change in `nmea2log`); Xcode's Run alone
@@ -209,120 +209,8 @@ The tests (`mysailinglogbook/tests/`) run with pytest through uv, e.g.
 `PYTHONPATH=src:../../nmea2log/src uv run --python 3.14 --with pytest --with rubicon-objc --with toga-core pytest tests`
 from `mysailinglogbook/`. The Python side this app calls into is covered separately by nmea2log's own pytest suite.
 
-Before changing the code, read [docs/design-choices.md](docs/design-choices.md): the texts both apps share,
-and the choices and gotchas worth knowing.
-
-## How it fits together
-
-The app is a Briefcase/Toga app (`com.ayuus.mysailinglogbook`, the same applicationId as Android) that calls the same
-`nmea2log` functions the Android app calls via Chaquopy -- here as plain Python calling Python:
-
-```
-MySailingLogbook (manual download + auto-start on launch)
-  -> network.detect_subnet_prefix()   network detection: finds the phone's own private-network subnet
-  -> android_entry.sync_from_w2k2()   [plain call into the real nmea2log package]
-       -> w2k2_download.discover_w2k2()   scans that subnet for the W2K-2's HTTP API
-       -> w2k2_download.download_file()    downloads new/changed .ebl files
-       -> run_pipeline()                  decode -> build_trips -> write_html_logbook()
-  -> WebView shows the resulting logbook.html
-  -> upload_via_rest() (optional)     publishes logbook.html to WordPress
-```
-
-The app calls these actions **download**, **assemble**, **publish** and **import**. Some names in the code still say sync
-or build (`sync_from_w2k2()`, `build_from_local_files()`): they are identifiers, not wording, and are not changed for the
-sake of it.
-
-What each part does on iOS:
-
-- The toolbar has all 7 of Android's own buttons, in the same order (download, import, assemble, publish,
-  view logbook, boat mode, settings), using the same icon shapes as Android's own vector
-  drawables (download, folder-download, refresh, upload, article, sailboat, settings; the SVGs are in
-  `resources/icons-svg/`) -- rasterized from hand-written SVGs that reproduce Android's `pathData`
-  verbatim, and the same tight, icon-only spacing (Settings pinned to the far right behind a
-  flexible spacer, no visible text label -- tooltip text only, same as `iconButton()`). Icons are
-  tinted via UIKit's "always template" rendering mode (`_template_tint_icon()` in `app.py`) so
-  they switch between black and white with Light/Dark mode the same way the title text next to
-  them already does -- found in practice: left untinted, they render as solid black regardless of
-  appearance, invisible against a dark toolbar.
-- **Download/Assemble**: call the same `nmea2log.android_entry.build_from_local_files()`/
-  `sync_from_w2k2()` functions Android calls via Chaquopy -- plain Python calling Python here, no
-  language boundary to cross. Runs on a background thread; UI updates marshal onto the main
-  thread via `loop.call_soon_threadsafe()`.
-- **View**: toggles the toolbar's content area between the log and a `toga.WebView` showing
-  `logbook.html`, same `set_content(root_url, html)` technique as `loadLogbookIntoWebView()`, and
-  the toolbar itself stays visible/usable throughout (including while a download or assemble is running), matching
-  `viewLocalLogbook()`'s own documented behavior.
-- **Settings**: mirrors `SettingsActivity.kt` field-for-field (W2K-2 login, boat identity,
-  publish method, boat-mode section, cache-clear buttons, a **Delete** button for the local `.ebl`
-  files (counts them, asks for confirmation with the number and size, then deletes them and the empty
-  folders; `nmea2log.ebl_storage`, shared with the Android app) and an Appearance section -- see below).
-  iOS forces two adaptations, documented in `settings_screen.py`: no second `toga.Window` (iOS
-  disallows one), so this swaps the single MainWindow's content in place instead; and
-  `toga.Selection` (an iOS picker) instead of Android's RadioGroup/Spinner. Persisted as plain
-  JSON in the sandbox (`settings_store.py`) rather than Android's EncryptedSharedPreferences -- no
-  Keychain wiring yet, a real gap worth closing before this app handles anyone's data but the
-  developer's own test credentials.
-- **Multilingual** (nl/en/fr/de), same four languages the generated HTML logbook and the Android
-  app both support: `translations.py` mirrors Android's `strings.xml` wording where the two
-  overlap, `detect_system_language()` picks the phone's own language (via `NSLocale`, rubicon-objc)
-  falling back to English, same as Android's own resource-qualifier fallback.
-- **Appearance**: Light/Dark/Follow device, set in Settings and applied immediately via
-  `UIWindow.overrideUserInterfaceStyle` (`apply_theme_mode()` in `app.py`) -- same three-way choice
-  Android's own `AppCompatDelegate`-based setting offers. One real platform gap, not fixable from
-  here: the native Launch Screen (shown before Python even starts, so before this setting is ever
-  read) can only follow the *phone's* own Light/Dark setting, via `systemColor="systemBackgroundColor"`
-  in `Launch Screen.storyboard` -- it cannot honor the in-app override for that one brief frame.
-  Android has the same limitation for its own splash screen, for the same underlying reason (the OS
-  draws it before any app code runs).
-- A real test suite (`tests/`) covers the pure logic: `network.py`'s private-IPv4 classification (mirrors
-  Android's own `HotspotDetectorTest.kt`), `settings_store.py`, `translations.py`, the boat-mode controller (with
-  stand-ins for the iOS calls) and `handlers.py`. Run it with pytest (the iOS classes it needs come from
-  `rubicon-objc`, which imports on a Mac); the two tests in `test_app.py` need UIKit itself and only pass on an
-  iPhone or in the Simulator.
-- The app's own launcher/app icon matches Android's design exactly (navy `#0D3358` background,
-  cream `#F5F1E6` book-with-course-line glyph) -- rendered from one shared SVG
-  (`resources/icons-svg/app-icon.svg`) at every size Xcode's `AppIcon.appiconset` and
-  `Splash.imageset` need (see the gotchas in [docs/design-choices.md](docs/design-choices.md) for how those sizes actually map).
-- **Publish**: uploads the just-built logbook to a WordPress site over REST
-  (`upload_via_rest()`, `_publish_logbook()` in `app.py`), the same as Android's own
-  `LogbookPublisher.kt`. WordPress is the only publish destination in both apps.
-- **Boat mode**: drives the same `nmea2log.bootmode.BootModeMachine` state machine Android's own
-  `BootModeController.kt`/`W2kBootExecutor.kt` drive (`boot_mode_controller.py`). iOS has no
-  foreground service, so there are two ways it runs:
-  - In the foreground it runs on timers, as before; the screen stays awake while it's active
-    (`UIApplication.idleTimerDisabled`).
-  - In the background iOS runs a `BGProcessingTask` **when iOS decides to** (some time after the time the
-    machine asked for -- possibly hours later, not at all in Low Power Mode): the machine gets a `Resume`
-    event, does what is due (look for the W2K-2, download and assemble, publish) and asks for the next task. A
-    local notification tells what happened. The machine's state is persisted after every step
-    (`boot_mode_state.json`), so a task that starts a fresh process, or opening the app again, carries on
-    where it was -- and every time the app becomes active it tries right away. The log then says what came of it,
-    in one short line: the W2K-2 is not reachable from this network (and when the next try is), reachable with
-    nothing new, or a round that starts as usual. When the planned round was missed, a line says so first.
-  Rounds in the background are best effort (how often is iOS's choice); there is no location access on
-  purpose. The Info.plist keys (`UIBackgroundModes: processing`, `BGTaskSchedulerPermittedIdentifiers`,
-  `NSLocalNetworkUsageDescription`) are in `pyproject.toml`; `briefcase update` does not copy them into an
-  existing generated Xcode project (only `briefcase create` does), so add them to
-  `build/.../xcode/MySailingLogbook/MySailingLogbook-Info.plist` by hand when that project already exists.
-  Background tasks do not run in the Simulator; to try one on a device, pause in Xcode and run
-  `e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:@"com.ayuus.mysailinglogbook.boatmode"]`.
-- `nmea2log` itself (zero third-party dependencies, `requires-python = ">=3.10"`) builds as a
-  pure-Python wheel and **imports and runs correctly inside the app on the iOS Simulator**, and
-  its full real pipeline (decode -> build trips -> write HTML) has been run against real archive
-  folders from the developer's own boat.
-- Runs on Python 3.14, the version Chaquopy bundles on the Android side (`nmea2log` itself only requires
-  `>=3.10`); Briefcase and the tests are run through [uv](https://docs.astral.sh/uv/) with `--python 3.14`, no sudo
-  needed on a fresh Mac instance -- Homebrew needs admin rights this account didn't have.
-
-### How `nmea2log` runs on iOS (resolved)
-
-[Python-Apple-support](https://github.com/beeware/Python-Apple-support) (BeeWare), used via
-Briefcase -- see the list above. The alternatives considered but not needed:
-
-- **[PythonKit](https://github.com/pvieito/PythonKit)** -- a nicer Swift-facing API over the
-  embedded interpreter than the raw Python C API; worth adding later if writing directly against
-  `Py_Initialize()`/the C API from Swift gets unwieldy, but not required to embed Python itself.
-- Reimplementing the needed subset natively in Swift -- not needed; `nmea2log` imports as-is.
+Before changing the code, read [docs/developer-notes.md](docs/developer-notes.md): how the app fits together, the texts
+both apps share, and the choices and gotchas worth knowing.
 
 ## Related repos
 
