@@ -522,12 +522,19 @@ def request_notification_permission() -> None:
         pass
 
 
-def post_local_notification(identifier: str, title: str, body: str) -> None:
-    """Shows a notification right now (a request with the same identifier replaces the earlier one)."""
+def post_local_notification(identifier: str, title: str, body: str, quiet: bool = False) -> None:
+    """Shows a notification right now (a request with the same identifier replaces the earlier one). ``quiet``: delivered
+    to the Notification Center without lighting the screen or making a sound (interruption level "passive"), for an update
+    that comes every few seconds."""
     try:
         content = _UNMutableNotificationContent.alloc().init()
         content.title = title
         content.body = body
+        if quiet:
+            try:
+                content.interruptionLevel = 0  # UNNotificationInterruptionLevelPassive (iOS 15+)
+            except Exception:
+                pass
         request = _UNNotificationRequest.requestWithIdentifier(identifier, content=content, trigger=None)
         _UNUserNotificationCenter.currentNotificationCenter().addNotificationRequest(request, withCompletionHandler=None)
     except Exception:

@@ -57,6 +57,7 @@ from nmea2log.bootmode import (
 )
 
 from .network import detect_subnet_prefix
+from .round_progress import BackgroundRoundProgress
 from .translations import t
 
 def format_status(kind: str, next_at_ms: Optional[int]) -> Optional[str]:
@@ -107,6 +108,9 @@ class BootModeController:
         self._next_wake_ms: Optional[int] = None
         # Set while the app has just been opened and the probe it started has not reported yet (see on_app_became_active()).
         self._catching_up = False
+        # A progress notification of a background round is showing (see round_progress.py): the status that follows replaces
+        # it, and when iOS ends the round's time it is replaced by a line saying so.
+        self._progress_shown = False
         # Seams for the tests: how work gets onto a thread, and the iOS calls.
         self._spawn = lambda target: threading.Thread(target=target, daemon=True).start()
         if native is None:
@@ -339,12 +343,30 @@ class BootModeController:
                 store.boat_name,
                 store.mmsi,
                 store.call_sign,
-                progress_callback=None,
+                progress_callback=self._round_progress(),
                 min_stop_minutes=store.min_stop_minutes,
             )
         except Exception as exc:
             return RoundFailed(message=str(exc))
         return round_outcome_from_result(result)
+
+    def _round_progress(self) -> BackgroundRoundProgress:
+        """What the round reports its progress to: the lines of the round go to the app's log (as on Android), and while iOS
+        runs the round in the background the progress is shown as a quiet notification."""
+        return BackgroundRoundProgress(
+            post=self._post_progress,
+            active=lambda: self._bg_task is not None,
+            on_log_line=lambda line: self.app.loop.call_soon_threadsafe(self.app.log, line),
+            labels={
+                "downloading": t("phase_downloading"),
+                "decoding": t("phase_decoding"),
+                "building_trips": t("phase_building_trips"),
+            },
+        )
+
+    def _post_progress(self, text: str) -> None:
+        self._progress_shown = True
+        self._native.post_local_notification("boatmode-status", t("tooltip_boat_mode_on"), text, quiet=True)
 
     def _on_round_finished(self, outcome: RoundOutcome) -> None:
         self._pending_work -= 1
@@ -402,6 +424,10 @@ class BootModeController:
         task, self._bg_task = self._bg_task, None
         if task is not None:
             self._native.complete_background_task(task, False)
+        if self._progress_shown:
+            # Otherwise the last "Downloading 12/80" would stay there as if the round were still going.
+            self._progress_shown = False
+            self._native.post_local_notification("boatmode-status", t("tooltip_boat_mode_on"), t("boat_progress_interrupted"))
         when = self._next_wake_ms if self._next_wake_ms is not None else self._now_ms() + _FALLBACK_WAKE_MS
         self._native.schedule_background_task(BACKGROUND_TASK_ID, when)
 
@@ -414,6 +440,7 @@ class BootModeController:
         self.app.log("[info] " + text)
         if self._bg_task is not None:
             # The app is not on screen: this is how the user finds out what a background round did.
+            self._progress_shown = False
             self._native.post_local_notification("boatmode-status", t("tooltip_boat_mode_on"), text)
 
     def _stop_service(self) -> None:

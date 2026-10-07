@@ -87,6 +87,7 @@ class FakeNative:
         self.completed = []
         self.expiration = None
         self.notifications = []
+        self.quiet_flags = []
         self.permission_requests = 0
 
     def schedule_background_task(self, identifier, at_ms):
@@ -114,8 +115,9 @@ class FakeNative:
     def background_refresh_available(self):
         return self.refresh_available
 
-    def post_local_notification(self, identifier, title, body):
+    def post_local_notification(self, identifier, title, body, quiet=False):
         self.notifications.append((identifier, title, body))
+        self.quiet_flags.append(quiet)
 
 
 def make_controller(data_dir: Path) -> BootModeController:
@@ -368,3 +370,78 @@ def test_opening_the_app_with_the_w2k2_in_reach_starts_a_round_and_says_nothing_
 
     assert not any("niet bereikbaar" in line for line in controller.app.logs)
     assert any(line for line in controller.app.logs if "[info]" in line and "ronde" in line.lower())
+
+
+def _round_reporting(monkeypatch, steps):
+    """sync_from_w2k2() that reports ``steps`` (phase, current, total) to the progress callback it is given."""
+
+    def fake(*args, **kwargs):
+        callback = kwargs["progress_callback"]
+        for phase, current, total in steps:
+            if phase == "downloading":
+                callback.report(current, total, "f.ebl")
+            else:
+                callback.onProgress(phase, current, total)
+        callback.onLogLine("2026-10-07 10:00:00 [info] a line of the round")
+        return {"ok": True, "downloaded_count": 2, "trip_count": 3, "boat_state": None}
+
+    monkeypatch.setattr(module.android_entry, "sync_from_w2k2", fake)
+
+
+def test_a_background_round_shows_its_progress_as_a_quiet_notification(tmp_path, monkeypatch):
+    _dutch(monkeypatch)
+    _round_reporting(monkeypatch, [("downloading", 1, 80), ("downloading", 2, 80), ("decoding", 1, 3)])
+    controller = make_controller(tmp_path)
+    controller._probe_subnet = lambda subnet: (False, False)
+    controller.start()
+    controller._probe_subnet = lambda subnet: (True, True)
+    controller._native.notifications.clear()
+    controller._native.quiet_flags.clear()
+    controller._bg_task = "task"
+
+    controller._round_outcome()
+
+    bodies = [body for _, _, body in controller._native.notifications]
+    assert bodies == ["Downloaden 1/80", "Decoderen 1/3"]  # the second download report is within the interval
+    assert all(controller._native.quiet_flags)
+    assert controller._progress_shown is True
+
+
+def test_a_round_with_the_app_on_screen_shows_no_progress_notification(tmp_path, monkeypatch):
+    _round_reporting(monkeypatch, [("downloading", 1, 80)])
+    controller = make_controller(tmp_path)
+    controller._probe_subnet = lambda subnet: (True, True)
+    controller._native.notifications.clear()
+
+    controller._round_outcome()
+
+    assert controller._native.notifications == []
+
+
+def test_the_lines_of_a_round_reach_the_log_of_the_app(tmp_path, monkeypatch):
+    _round_reporting(monkeypatch, [])
+    controller = make_controller(tmp_path)
+    controller._probe_subnet = lambda subnet: (True, True)
+    controller.app.loop = type("Loop", (), {"call_soon_threadsafe": staticmethod(lambda fn, *a: fn(*a))})()
+
+    controller._round_outcome()
+
+    assert any("a line of the round" in line for line in controller.app.logs)
+
+
+def test_the_status_after_a_round_replaces_the_progress_and_an_interrupted_round_says_so(tmp_path, monkeypatch):
+    _dutch(monkeypatch)
+    controller = make_controller(tmp_path)
+    controller._bg_task = "task"
+    controller._post_progress("Downloaden 5/80")
+    assert controller._progress_shown is True
+
+    controller._notify("ROUND_DONE", None)
+    assert controller._progress_shown is False
+    assert controller._native.notifications[-1][0] == "boatmode-status"
+
+    controller._post_progress("Downloaden 9/80")
+    controller._on_background_expired()
+
+    assert controller._progress_shown is False
+    assert "iOS heeft de ronde gepauzeerd" in controller._native.notifications[-1][2]

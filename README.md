@@ -127,8 +127,10 @@ allows -- and:
 
 iOS has no foreground service: with the app open the mode runs on timers and keeps the screen awake; in the background iOS
 decides when it runs a background task (some time after the time the mode asked for -- possibly hours later, and not at
-all in Low Power Mode or with Background App Refresh off). When you open the app the mode tries right away, and the log
-says what came of it. There is no location access, on purpose. The Android app's
+all in Low Power Mode or with Background App Refresh off). While iOS runs a round in the background, a quiet
+notification shows its progress ("Downloading 12/80", updated every 15 seconds or so; iOS has no progress bar in a
+notification), and the notification of the result replaces it. When you open the app the mode tries right away, and the
+log says what came of it. There is no location access, on purpose. The Android app's
 [docs/boat-mode.md](https://github.com/Ayuus/mysailinglogbook-android/blob/main/docs/boat-mode.md) describes the shared
 state machine (states, timers, notifications) in full.
 

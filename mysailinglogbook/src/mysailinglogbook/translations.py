@@ -77,6 +77,12 @@ _STRINGS = {
         "fr": "Mode de publication",
         "de": "Veröffentlichungsart",
     },
+    "boat_progress_interrupted": {
+        "en": "Boat mode: iOS paused the round, it goes on next time.",
+        "nl": "Boot-modus: iOS heeft de ronde gepauzeerd, die gaat de volgende keer verder.",
+        "fr": "Mode bateau : iOS a mis le tour en pause, il reprendra la prochaine fois.",
+        "de": "Bootsmodus: iOS hat die Runde pausiert, sie geht beim nächsten Mal weiter.",
+    },
     "boat_bg_low_power": {
         "en": "Low Power Mode is on: no background tasks then.",
         "nl": "Spaarstand staat aan: dan draaien er geen achtergrondtaken.",
