@@ -159,3 +159,7 @@ class SettingsStore:
     @property
     def theme_mode(self) -> str:
         return self._values["theme_mode"]
+
+    @property
+    def logbook_view(self) -> str:
+        return self._values["logbook_view"]

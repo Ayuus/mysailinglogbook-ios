@@ -50,6 +50,9 @@ trips assembled from them.*
 
 *Settings (top and bottom).*
 
+Under Appearance you choose light, dark or following the device, and the layout of the logbook: a card per trip (what
+"automatic" picks on a phone held upright) or the table (what it picks on a wide screen).
+
 <p>
 <img src="docs/screenshots/boat-mode.png" width="230" alt="Boat mode on: the filled sailboat button and its status in the log">
 </p>

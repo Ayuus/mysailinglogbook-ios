@@ -188,6 +188,22 @@ class SettingsScreen:
         }.get(self.store.theme_mode, self._theme_system)
         form.add(self.theme_selection)
 
+        # How the logbook page lays out its trips; handed to the page after it has loaded (app.py's apply_logbook_prefs()),
+        # as the page's own buttons store their choice where the web view does not keep it.
+        form.add(toga.Label(t("label_logbook_layout"), style=Pack(margin_top=12)))
+        self._layout_auto = t("radio_layout_auto")
+        self._layout_cards = t("radio_layout_cards")
+        self._layout_table = t("radio_layout_table")
+        self.layout_selection = native_ui.closing_picker(
+            toga.Selection(items=[self._layout_auto, self._layout_cards, self._layout_table], style=Pack(margin_top=8)),
+            self.app.loop,
+        )
+        self.layout_selection.value = {
+            "cards": self._layout_cards,
+            "table": self._layout_table,
+        }.get(self.store.logbook_view, self._layout_auto)
+        form.add(self.layout_selection)
+
         # Same reasoning as SettingsActivity.kt's own clearCacheButton(): two separate buttons,
         # not one "clear everything" -- clearing the wrong cache is real, avoidable extra
         # network/CPU cost.
@@ -401,6 +417,11 @@ class SettingsScreen:
                 self._theme_dark: "dark",
                 self._theme_system: "system",
             }[self.theme_selection.value],
+            "logbook_view": {
+                self._layout_auto: "auto",
+                self._layout_cards: "cards",
+                self._layout_table: "table",
+            }[self.layout_selection.value],
         }
 
         # The details are always saved as typed, and the choice only says whether publishing is on -- picking
@@ -414,6 +435,7 @@ class SettingsScreen:
 
         self.store.update(**fields)
         self.app.apply_theme_mode()
+        self.app.apply_logbook_prefs()
         self._remove_keyboard_avoidance()
         self.app.show_main_screen()
         # Android shows a toast; the log is the nearest thing here.

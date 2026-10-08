@@ -13,7 +13,7 @@ from pathlib import Path
 import toga
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
-from nmea2log import android_entry, app_constants, import_ebl, run_outcome
+from nmea2log import android_entry, app_constants, app_settings, import_ebl, run_outcome
 from nmea2log import log as nmea_log
 from nmea2log.upload import UploadError, normalize_rest_upload_url, upload_via_rest
 
@@ -158,7 +158,7 @@ class MySailingLogbook(toga.App):
         # a file already on disk -- doesn't touch SyncState at all). content_area holds whichever
         # one is currently showing; see _show_log_content()/_show_logbook_content().
         self.log_view = toga.MultilineTextInput(readonly=True, style=Pack(flex=1))
-        self.web_view = toga.WebView(style=Pack(flex=0, display="none"))
+        self.web_view = toga.WebView(style=Pack(flex=0, display="none"), on_webview_load=lambda widget: self.apply_logbook_prefs())
         # toga's WebView reports a minimum height of 100 even while hidden (display none, height 0 and
         # flex 0 included), which kept 100pt of the screen reserved under the log -- found in practice:
         # a blank band below the last log line, with the log only 600pt tall on a 700pt area. Shown, it
@@ -311,6 +311,13 @@ class MySailingLogbook(toga.App):
             return
         self.log("[info] " + t("status_listing_files", subnet=subnet_prefix))
         self._start_background(self._run_download, subnet_prefix, busy_button=self.download_button)
+
+    def apply_logbook_prefs(self) -> None:
+        """Tells the logbook page the theme (Appearance) and layout (cards/table) chosen in Settings -- MainActivity's own
+        applyLogbookPrefs(). The page's own buttons store their choice in localStorage, which a web view does not keep between
+        runs. Called when a page has loaded and when Settings were saved."""
+        store = self.settings_store
+        self.web_view.evaluate_javascript(app_settings.logbook_prefs_script(store.theme_mode, store.logbook_view))
 
     def apply_theme_mode(self) -> None:
         """Applies settings_store.theme_mode to the app's own UI (main_window and everything in
