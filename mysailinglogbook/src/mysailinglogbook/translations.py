@@ -137,6 +137,11 @@ def detect_system_language() -> str:
 _LANGUAGE = detect_system_language()
 
 
+def language() -> str:
+    """The language of the UI (nl/en/fr/de), the device's own."""
+    return _LANGUAGE
+
+
 def t(key: str, **kwargs) -> str:
     """Looks up key in the device's own language (detected once at import time), falling back
     to English if the key or language is missing. kwargs are substituted into the string via

@@ -28,6 +28,7 @@ from toga.style.pack import COLUMN, NONE, ROW, Pack
 from nmea2log import app_settings, ebl_storage
 
 from . import native_ui
+from .help_screen import HelpScreen
 from .settings_store import DEFAULT_MIN_STOP_MINUTES
 from .translations import t
 
@@ -61,6 +62,9 @@ class SettingsScreen:
         # A plain vertical Box (not yet in a ScrollContainer -- that wraps it below), same
         # top-to-bottom field order as SettingsActivity.kt's own layout.
         form = toga.Box(style=Pack(direction=COLUMN, margin=16))
+
+        # The help (shared with the Android app, see help_screen.py): there is no room for an icon in the toolbar.
+        form.add(toga.Button(t("button_help"), on_press=self._on_help, style=Pack(margin_top=4)))
 
         self._section_header(form, t("section_w2k2_boat"))
         self.user_field = self._field(form, t("label_w2k2_user"), self.store.w2k2_user)
@@ -187,22 +191,6 @@ class SettingsScreen:
             "system": self._theme_system,
         }.get(self.store.theme_mode, self._theme_system)
         form.add(self.theme_selection)
-
-        # How the logbook page lays out its trips; handed to the page after it has loaded (app.py's apply_logbook_prefs()),
-        # as the page's own buttons store their choice where the web view does not keep it.
-        form.add(toga.Label(t("label_logbook_layout"), style=Pack(margin_top=12)))
-        self._layout_auto = t("radio_layout_auto")
-        self._layout_cards = t("radio_layout_cards")
-        self._layout_table = t("radio_layout_table")
-        self.layout_selection = native_ui.closing_picker(
-            toga.Selection(items=[self._layout_auto, self._layout_cards, self._layout_table], style=Pack(margin_top=8)),
-            self.app.loop,
-        )
-        self.layout_selection.value = {
-            "cards": self._layout_cards,
-            "table": self._layout_table,
-        }.get(self.store.logbook_view, self._layout_auto)
-        form.add(self.layout_selection)
 
         # Same reasoning as SettingsActivity.kt's own clearCacheButton(): two separate buttons,
         # not one "clear everything" -- clearing the wrong cache is real, avoidable extra
@@ -379,6 +367,10 @@ class SettingsScreen:
         deleted, freed = ebl_storage.delete_all(folder)
         await self.app.main_window.dialog(InfoDialog(title, t("toast_ebl_files_deleted", count=deleted, size=freed)))
 
+    def _on_help(self, widget):
+        # Close brings this same screen back, so what was typed and not yet saved is still there.
+        self.app.main_window.content = HelpScreen(self.app, self.content).content
+
     async def _on_cancel(self, widget):
         self._remove_keyboard_avoidance()
         self.app.show_main_screen()
@@ -417,11 +409,6 @@ class SettingsScreen:
                 self._theme_dark: "dark",
                 self._theme_system: "system",
             }[self.theme_selection.value],
-            "logbook_view": {
-                self._layout_auto: "auto",
-                self._layout_cards: "cards",
-                self._layout_table: "table",
-            }[self.layout_selection.value],
         }
 
         # The details are always saved as typed, and the choice only says whether publishing is on -- picking

@@ -116,6 +116,19 @@ def round_corners(button, radius=10) -> None:
     native.clipsToBounds = True
 
 
+def open_url(url: str) -> None:
+    """Opens ``url`` in Safari."""
+    try:
+        nsurl = ObjCClass("NSURL").URLWithString(url)
+        try:
+            application = _UIApplication.sharedApplication
+            application.openURL(nsurl, options={}, completionHandler=None)
+        except Exception:
+            _UIApplication.sharedApplication().openURL(nsurl, options={}, completionHandler=None)
+    except Exception:
+        pass
+
+
 def set_idle_timer_disabled(disabled: bool) -> None:
     """Keeps the screen from auto-locking while boat mode is on: boat mode is foreground-only (iOS has no equivalent
     of Android's foreground service), so the app being suspended when the screen locks would stop it just as surely as

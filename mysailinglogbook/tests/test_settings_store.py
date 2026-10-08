@@ -127,3 +127,12 @@ def test_theme_mode_defaults_to_system_and_persists(tmp_path):
     reloaded = SettingsStore(tmp_path)
 
     assert reloaded.theme_mode == "dark"
+
+
+def test_help_seen_defaults_to_false_and_persists(tmp_path):
+    store = SettingsStore(tmp_path)
+    assert store.help_seen is False  # the welcome that offers the help has not been shown yet
+
+    store.update(help_seen=True)
+
+    assert SettingsStore(tmp_path).help_seen is True

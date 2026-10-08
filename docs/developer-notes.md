@@ -180,3 +180,10 @@ Real gotchas found in practice, worth remembering:
   a *Launch Screen* storyboard, as opposed to a normal app screen (where a custom named color,
   untested here, may well work fine). Prefer a system color for anything Launch-Screen-related;
   don't assume a custom color asset that compiles cleanly also *resolves* correctly there.
+
+## The help
+
+The help (Settings > Help and manual, and a welcome the first time) is a page shared with the other app, kept in nmea2log:
+`assets/help/help.html`, shown by `HelpActivity` / `help_screen.py` and refreshed from GitHub by `nmea2log.help_page`. How it
+works, how to change the text, and which screenshots each app brings along:
+[nmea2log/docs/app-help.md](https://github.com/Ayuus/nmea2log/blob/main/docs/app-help.md).

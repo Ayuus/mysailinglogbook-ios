@@ -6,20 +6,23 @@ status area, logbook view) are the same; see the Android app's MainActivity.kt f
 reference behavior each of these will eventually need to match.
 """
 
+import asyncio
 import threading
 import time
 from pathlib import Path
 
 import toga
+from toga.dialogs import QuestionDialog
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
-from nmea2log import android_entry, app_constants, app_settings, import_ebl, run_outcome
+from nmea2log import android_entry, app_constants, app_settings, help_page, import_ebl, run_outcome
 from nmea2log import log as nmea_log
 from nmea2log.upload import UploadError, normalize_rest_upload_url, upload_via_rest
 
 from .boot_mode_controller import BACKGROUND_TASK_ID, BootModeController
 from . import native_ui
 from .network import detect_subnet_prefix
+from .help_screen import HelpScreen, cache_dir as help_cache_dir
 from .settings_screen import SettingsScreen
 from .settings_store import SettingsStore
 from .translations import t
@@ -223,6 +226,9 @@ class MySailingLogbook(toga.App):
         self.main_window.content = self.main_content
         self.apply_theme_mode()
         self.main_window.show()
+        # A newer help page from GitHub, when there is internet (at most once a day, quietly), and the welcome the first time.
+        threading.Thread(target=help_page.refresh, args=(help_cache_dir(self),), daemon=True).start()
+        self.loop.call_later(1.0, lambda: asyncio.ensure_future(self._maybe_show_help_welcome()))
 
         # Mirrors SyncState.inProgress/cancelled on Android (MainActivity.runSync()'s own
         # guard) -- only one sync/build runs at a time; tapping the button that started the run
@@ -312,12 +318,28 @@ class MySailingLogbook(toga.App):
         self.log("[info] " + t("status_listing_files", subnet=subnet_prefix))
         self._start_background(self._run_download, subnet_prefix, busy_button=self.download_button)
 
+    def show_help_screen(self) -> None:
+        self.main_window.content = HelpScreen(self, self.main_content).content
+
+    async def _maybe_show_help_welcome(self) -> None:
+        """The first time the app is opened: a short welcome that offers the help (also reachable from Settings, at the top).
+        Not for someone who has already filled in the W2K-2 login -- an update must not greet them as a newcomer. Marked as dealt
+        with straight away, so it is shown once whatever the answer."""
+        store = self.settings_store
+        if store.help_seen:
+            return
+        store.update(help_seen=True)
+        if store.w2k2_user.strip():
+            return
+        if await self.main_window.dialog(QuestionDialog(t("dialog_help_title"), t("dialog_help_message"))):
+            self.show_help_screen()
+
     def apply_logbook_prefs(self) -> None:
-        """Tells the logbook page the theme (Appearance) and layout (cards/table) chosen in Settings -- MainActivity's own
+        """Tells the logbook page the theme (Appearance) chosen in Settings -- MainActivity's own
         applyLogbookPrefs(). The page's own buttons store their choice in localStorage, which a web view does not keep between
         runs. Called when a page has loaded and when Settings were saved."""
         store = self.settings_store
-        self.web_view.evaluate_javascript(app_settings.logbook_prefs_script(store.theme_mode, store.logbook_view))
+        self.web_view.evaluate_javascript(app_settings.logbook_prefs_script(store.theme_mode))
 
     def apply_theme_mode(self) -> None:
         """Applies settings_store.theme_mode to the app's own UI (main_window and everything in
