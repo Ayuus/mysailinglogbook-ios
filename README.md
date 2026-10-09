@@ -115,6 +115,14 @@ A long-running action (download/assemble/publish) shows a pulsing version of its
 tap it again to cancel. Stay in the app until it is done: iOS pauses an app shortly after you leave it, and only the
 boat mode's background rounds show a notification (see "Boat mode" below).
 
+### Try it without a boat
+
+Download [`demo-ebl.zip`](https://github.com/Ayuus/nmea2log/releases/download/demo-data/demo-ebl.zip) -- the `.ebl` files of a made-up
+cruise on the Wadden Sea, nothing real in them -- and unzip it (in the Files app, tap the zip). In the app tap **Import** and pick the unzipped `Actisense`
+folder: the app copies the files and builds a logbook of five trips, the same as the
+[demo logbook](https://ayuus.github.io/nmea2log/examples/demo-logbook.html). Settings > Local .ebl files > Delete removes the files again.
+More about them: [examples/demo-data](https://github.com/Ayuus/nmea2log/tree/main/examples/demo-data).
+
 ### Boat mode
 
 Turned on/off via the sailboat button (Settings has a switch "Turn on automatically on launch", which starts it whenever
