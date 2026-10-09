@@ -112,8 +112,8 @@ already-built logbook full-screen, toggles back to the log), **boat mode** (see 
 **settings**.
 
 A long-running action (download/assemble/publish) shows a pulsing version of its own button --
-tap it again to cancel. The notification shade shows the same thing while the app isn't on
-screen, with a real progress bar.
+tap it again to cancel. Stay in the app until it is done: iOS pauses an app shortly after you leave it, and only the
+boat mode's background rounds show a notification (see "Boat mode" below).
 
 ### Boat mode
 
