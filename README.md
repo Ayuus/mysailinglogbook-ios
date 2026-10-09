@@ -12,6 +12,10 @@ It does **not** reimplement any of the NMEA 2000 decoding, trip-building, or HTM
 and drives it from Python. A fix or feature added to `nmea2log` is picked up by this app on the next `briefcase update` --
 there is no copy to keep in sync.
 
+**No boat at hand?** Try the app with the **demo data**: the `.ebl` files of a made-up cruise (five trips, nothing real in
+them), to download from the [nmea2log repository](https://github.com/Ayuus/nmea2log/tree/main/examples/demo-data) -- see
+[Try it without a boat](#try-it-without-a-boat) below for how.
+
 **Looking for testers**: the iOS app works on a real iPhone, but it is not on the App Store or TestFlight yet (my Apple
 Developer account is not validated yet), so for now it is installed from source with Xcode -- see Building. So far it
 has only been run against one boat's NMEA2000 network (a **motorboat**, one Actisense W2K-2). Other boats/instrument
