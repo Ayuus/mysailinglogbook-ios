@@ -102,7 +102,7 @@ any private network (the Android app only does so when its own hotspot is on).
 ### The toolbar
 
 Left to right: **download** (fetch new data from the W2K-2 and assemble the logbook), **import**
-(copy `.ebl` files from an SD card or USB drive instead -- no W2K-2 needed, e.g. a card pulled
+(copy `.ebl` files from a folder you pick -- on the phone, an SD card or a USB drive -- instead; no W2K-2 needed, e.g. a card pulled
 straight from the instrument -- then assemble/publish exactly like a normal download would), **assemble**
 (assemble the logbook again from whatever's already on the phone, no W2K-2 needed -- useful to pick
 up a settings change, or just to see the logbook without being near the boat), **publish** (send
