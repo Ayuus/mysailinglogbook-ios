@@ -21,6 +21,9 @@ comparison identifier (t() is deterministic per process, so this is safe).
 
 from __future__ import annotations
 
+import asyncio
+import threading
+
 import toga
 from toga.dialogs import ConfirmDialog, InfoDialog
 from toga.style.pack import COLUMN, NONE, ROW, Pack
@@ -208,6 +211,11 @@ class SettingsScreen:
         # The raw .ebl files themselves (the caches above never touch them), for freeing the phone's
         # storage -- counted and deleted by nmea2log.ebl_storage, the same code the Android app uses.
         self._section_header(form, t("section_ebl_files"))
+        # Copy them to a folder the owner picks (a USB drive, iCloud Drive, another cloud folder in Files): the same button as in
+        # the Android app, where it is the way to back the archive up from the phone itself.
+        self._backup_button = self._cache_row(
+            form, t("label_ebl_backup"), self._on_backup_ebl_files, button_text=t("button_copy"), button_width=112
+        )
         self._cache_row(
             form, t("button_ebl_files"), self._on_delete_ebl_files, button_text=t("button_delete"), button_width=112
         )
@@ -295,6 +303,7 @@ class SettingsScreen:
         native_ui.round_corners(button)
         row.add(button)
         container.add(row)
+        return button
 
     def _remove_keyboard_avoidance(self) -> None:
         self._keyboard_avoidance.remove()
@@ -348,6 +357,43 @@ class SettingsScreen:
             if path.exists():
                 path.unlink()
         await self.app.main_window.dialog(InfoDialog(t("section_cache"), t("toast_cache_cleared")))
+
+    async def _on_backup_ebl_files(self, widget):
+        title = t("section_ebl_files")
+        if self.app.sync_in_progress or self.app.boot_mode_controller.busy:
+            await self.app.main_window.dialog(InfoDialog(title, t("toast_ebl_delete_busy")))
+            return
+        if ebl_storage.describe(self.app.ebl_dir())[0] == 0:
+            await self.app.main_window.dialog(InfoDialog(title, t("toast_ebl_files_none")))
+            return
+        # Held on self: the picker's delegate is not retained by UIKit (see native_ui).
+        self._backup_picker_delegate = native_ui.present_folder_picker(self.app, self._on_backup_folder_picked)
+
+    def _on_backup_folder_picked(self, url) -> None:
+        """The folder the owner picked (called on the main thread, by native_ui's picker delegate): the copy runs on a thread
+        of its own, nmea2log.ebl_storage.backup_to does it, the same rules as the Android app."""
+        threading.Thread(target=self._backup_to, args=(url,), daemon=True).start()
+
+    def _backup_to(self, url) -> None:
+        title = t("section_ebl_files")
+        granted = bool(url.startAccessingSecurityScopedResource())
+        try:
+            def report(current: int, total: int, name: str) -> None:
+                # The progress is the text of the button itself ("3/80"): the main screen's progress bar is not on screen here.
+                self.app.loop.call_soon_threadsafe(setattr, self._backup_button, "text", f"{current}/{total}")
+
+            result = ebl_storage.backup_to(self.app.ebl_dir(), str(url.path), report)
+            if result["errors"]:
+                message = t("toast_ebl_backup_errors", errors=len(result["errors"]))
+            else:
+                message = t("toast_ebl_backup_done", copied=result["copied"], skipped=result["skipped"])
+        except Exception as exc:  # a drive that went away, a cloud folder that is not there any more
+            message = t("toast_ebl_backup_failed", detail=str(exc))
+        finally:
+            if granted:
+                url.stopAccessingSecurityScopedResource()
+        self.app.loop.call_soon_threadsafe(setattr, self._backup_button, "text", t("button_copy"))
+        self.app.loop.call_soon_threadsafe(lambda: asyncio.ensure_future(self.app.main_window.dialog(InfoDialog(title, message))))
 
     async def _on_delete_ebl_files(self, widget):
         title = t("section_ebl_files")

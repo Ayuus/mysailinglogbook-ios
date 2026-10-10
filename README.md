@@ -174,10 +174,12 @@ assemble.
 - **The archive** is the folder `Documents/Actisense/` of the app. The app enables file sharing, so it shows in the
   **Files** app (On My iPhone > My Sailing Logbook > Actisense) and in Finder over USB (select the iPhone > Files). The
   simplest cloud backup: in Files, copy the folder to **iCloud Drive**, or to OneDrive, Dropbox or Google Drive once
-  their apps are installed. Do it after every trip or season, and **before** you use Settings > Local .ebl files >
-  Delete.
-- **Restoring**: copy the folder back into the app's folder in Files (or Finder) and tap assemble. The first assemble
-  takes longer, as the caches are rebuilt too.
+  their apps are installed. The app can do the copying too, as on Android: **Settings > Local .ebl files > Copy** asks for
+  a folder (a USB drive, iCloud Drive, another cloud folder) and copies the archive into a folder `Actisense` there, with
+  the same sub-folders; a second copy only adds what is new. Do it after every trip or season, and **before** you use
+  Settings > Local .ebl files > Delete.
+- **Restoring**: tap **Import** and pick the folder you copied to, or copy the folder back into the app's folder in Files
+  (or Finder) and tap assemble. The first assemble takes longer, as the caches are rebuilt too.
 - **The settings** are `Documents/settings.json` in the same place, **with the W2K-2 and WordPress passwords in plain
   text**: keep that file out of cloud folders you do not fully trust. Typing the logins in again after a restore (from a
   password manager) is the safe way.

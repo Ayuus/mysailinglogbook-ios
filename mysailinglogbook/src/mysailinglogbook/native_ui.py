@@ -370,26 +370,28 @@ class FolderPickerDelegate(NSObject, protocols=[_UIDocumentPickerDelegate]):
     Toga has no folder picker on iOS (toga_iOS.dialogs' SelectFolderDialog/OpenFileDialog are not_implemented() stubs).
 
     ``app_ref`` is set right after alloc().init() -- an instance of this class is otherwise indistinguishable from
-    any other bare NSObject to Python. It must be held by its owner too: UIDocumentPickerViewController's delegate
-    property does not retain it."""
+    any other bare NSObject to Python. ``callback``, when set, gets the folder instead of ``app_ref.on_folder_picked``.
+    It must be held by its owner too: UIDocumentPickerViewController's delegate property does not retain it."""
 
     @objc_method
     def documentPicker_didPickDocumentsAtURLs_(self, controller, urls) -> None:
         url = ObjCInstance(urls).objectAtIndex(0)
-        self.app_ref.on_folder_picked(url)
+        callback = getattr(self, "callback", None)
+        (callback or self.app_ref.on_folder_picked)(url)
 
     @objc_method
     def documentPickerWasCancelled_(self, controller) -> None:
         pass
 
 
-def present_folder_picker(app) -> FolderPickerDelegate:
-    """Shows the system folder picker; ``app.on_folder_picked(url)`` gets the chosen folder. Returns the delegate,
-    which the caller keeps alive (see FolderPickerDelegate)."""
+def present_folder_picker(app, callback=None) -> FolderPickerDelegate:
+    """Shows the system folder picker; ``callback(url)`` (default: ``app.on_folder_picked``, the import) gets the chosen
+    folder. Returns the delegate, which the caller keeps alive (see FolderPickerDelegate)."""
     folder_type = _UTType.typeWithIdentifier("public.folder")
     picker = _UIDocumentPickerViewController.alloc().initForOpeningContentTypes([folder_type])
     delegate = FolderPickerDelegate.alloc().init()
     delegate.app_ref = app
+    delegate.callback = callback
     picker.delegate = delegate
     toga.App.app.current_window._impl.native.rootViewController.presentViewController(
         picker, animated=True, completion=None
