@@ -1,7 +1,7 @@
 # My Sailing Logbook (iOS)
 
 iOS counterpart to [mysailinglogbook-android](https://github.com/Ayuus/mysailinglogbook-android): downloads
-voyage data from a boat's [Actisense W2K-2](https://actisense.com) NMEA 2000-to-WiFi gateway,
+voyage data from a boat's [Actisense W2K-2](https://actisense.com/products/w2k-2-nmea-2000-wifi-gateway/) NMEA 2000-to-WiFi gateway,
 assembles the same HTML sailing logbook the desktop [nmea2log](https://github.com/Ayuus/nmea2log)
 CLI produces, shows it in-app, and (optionally) publishes it to a WordPress site. An optional "boat mode" can also do
 all of the above on its own, on an interval -- see "Using the app" below. Same feature set as the Android app, same
