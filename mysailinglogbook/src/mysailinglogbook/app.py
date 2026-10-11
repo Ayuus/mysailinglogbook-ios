@@ -238,6 +238,7 @@ class MySailingLogbook(toga.App):
         self._busy_button = None
         self._run_initiator = "build"
         self.update_publish_button_enabled()
+        self.update_w2k2_buttons_enabled()
 
         # The boat mode's background rounds (see boot_mode_controller.py). Registered here, still inside the launch: iOS
         # starts the app for them, on a queue of its own (hence the loop). The mode carries on after the app was
@@ -295,16 +296,13 @@ class MySailingLogbook(toga.App):
         """
         store = self.settings_store
         if not store.is_w2k2_config_complete:
-            # Just calls on_download() rather than duplicating its own is_w2k2_config_complete
-            # check and log_fill_w2k2_credentials line here too (asked for explicitly, matching
-            # MainActivity.kt's own equivalent simplification: "1x is toch genoeg?") --
-            # on_download() already starts with the exact same check and produces the exact same
-            # message for a manual tap on the download button, so this is the single source of
-            # truth for what to show when settings are incomplete, reached either way. No
-            # existing-logbook fallback either way (asked for explicitly, "logboek alleen tonen
-            # als auto download uit staat") -- that fallback belongs solely to startup()'s own
-            # else branch (self.on_view(None), unconditional) for when auto-download is off.
-            self.on_download(None)
+            # Nothing to do and nothing more to say (asked for explicitly, matching MainActivity.kt's
+            # equivalent: "1x is toch genoeg?"): update_w2k2_buttons_enabled() has already
+            # disabled the download button and logged why, so this does not call on_download() for
+            # a second, near-identical "fill in the login" line. No existing-logbook fallback either
+            # (asked for explicitly, "logboek alleen tonen als auto download uit staat") -- that
+            # fallback belongs solely to startup()'s own else branch (self.on_view(None),
+            # unconditional) for when auto-download is off.
             return
         subnet_prefix = detect_subnet_prefix()
         if subnet_prefix is None:
@@ -777,6 +775,9 @@ class MySailingLogbook(toga.App):
         )
         native_ui.template_tint_icon(self.boat_mode_button)
         native_ui.set_idle_timer_disabled(active)
+        # Stopped without the login (cleared in Settings meanwhile): the button goes back to disabled.
+        if not self.sync_in_progress:
+            self.boat_mode_button.enabled = self._boat_mode_usable()
 
     def on_settings(self, widget):
         self.show_settings_screen()
@@ -790,6 +791,7 @@ class MySailingLogbook(toga.App):
     def show_main_screen(self) -> None:
         self.main_window.content = self.main_content
         self.update_publish_button_enabled()
+        self.update_w2k2_buttons_enabled()
 
     def _start_background(self, target, *args, busy_button=None) -> None:
         self.sync_in_progress = True
@@ -854,6 +856,27 @@ class MySailingLogbook(toga.App):
         store = self.settings_store
         return store.is_publish_configured
 
+    def _boat_mode_usable(self) -> bool:
+        """The boat mode needs the Actisense W2K-2's login too; one that is still running (until it has been stopped, see
+        update_w2k2_buttons_enabled()) keeps its button, to show the state."""
+        return self.settings_store.is_w2k2_config_complete or self.boot_mode_controller.active
+
+    def update_w2k2_buttons_enabled(self) -> None:
+        """Download and boat mode need the Actisense W2K-2's own login (its username and password, not a cloud account):
+        without it both buttons are disabled and the log says why, once, when the download button has just become unusable --
+        like the publish button (MainActivity.updateSyncButtonAvailability() and updateBootButton()). Without the login
+        every round of the boat mode would fail, so a mode that is still running is switched off (the controller logs that;
+        on_boot_mode_active_changed() then disables its button)."""
+        configured = self.settings_store.is_w2k2_config_complete
+        was_enabled = self.download_button.enabled
+        if not configured and self.boot_mode_controller.active:
+            self.boot_mode_controller.stop()
+        if not self.sync_in_progress:
+            self.download_button.enabled = configured
+            self.boat_mode_button.enabled = self._boat_mode_usable()
+            if not configured and was_enabled:
+                self.log("[info] " + t("log_w2k2_not_configured"))
+
     def update_publish_button_enabled(self) -> None:
         """Publish is only usable once WordPress is filled in (MainActivity.updatePublishButtonEnabled()):
         called at start and when Settings was saved. The log says so once, when the button has just become
@@ -883,7 +906,14 @@ class MySailingLogbook(toga.App):
                 continue
             # Publish only makes sense once a destination is filled in (MainActivity's
             # updatePublishButtonEnabled()); Assemble covers building without one.
-            button.enabled = enabled and (button is not self.publish_button or self._publish_configured())
+            usable = True
+            if button is self.publish_button:
+                usable = self._publish_configured()
+            elif button is self.download_button:
+                usable = self.settings_store.is_w2k2_config_complete
+            elif button is self.boat_mode_button:
+                usable = self._boat_mode_usable()
+            button.enabled = enabled and usable
 
     # Runs on the background thread started by _start_background() -- see the comment above
     # _run_build_from_local_files(). Reached from on_folder_picked() via _start_background().
