@@ -1,8 +1,8 @@
 """Tests for boot_mode_controller.py's own pure function -- the one place it does real
 formatting work of its own (the round outcome and the status table moved to nmea2log's bootmode.py, and
 their tests to its tests/test_bootmode.py), rather than just carrying out an Action by calling into
-android_entry/detect_subnet_prefix (real network I/O, not unit-tested here, same reasoning as
-network.py's own _local_outbound_ip()). Everything the state machine itself decides (phases,
+app_entry/detect_subnet_prefix (real network I/O, not unit-tested here, same reasoning as
+nmea2log.subnet.outbound_ipv4()). Everything the state machine itself decides (phases,
 thresholds, harbour/left-the-boat detection) is covered by nmea2log's own tests/test_bootmode.py,
 not duplicated here."""
 

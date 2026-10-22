@@ -1,7 +1,7 @@
 """Tests for translations.py. pick_language() is tested directly with plain string lists (see its
 own doc comment for why it's split out from detect_system_language()) -- the actual
 NSLocale.preferredLanguages integration isn't unit-tested here, same reasoning as network.py's own
-_local_outbound_ip(): it's a one-line call to a real OS API, all the logic worth testing is
+nmea2log.subnet.outbound_ipv4(): it's a one-line call to a real OS API, all the logic worth testing is
 already in the pure function it delegates to."""
 
 import re

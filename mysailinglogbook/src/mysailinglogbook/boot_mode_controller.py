@@ -30,7 +30,7 @@ import time
 from dataclasses import replace
 from typing import Optional
 
-from nmea2log import android_entry
+from nmea2log import app_entry
 from nmea2log.bootmode import (
     BootState,
     Resume,
@@ -285,7 +285,7 @@ class BootModeController:
                 outcome["found"] = found
                 outcome["has_new_files"] = has_new_files
 
-        android_entry.probe_w2k2(
+        app_entry.probe_w2k2(
             store.w2k2_user, store.w2k2_password, subnet, str(self.app.ebl_dir()), _ProbeCallback()
         )
         return outcome["found"], outcome["has_new_files"]
@@ -333,7 +333,7 @@ class BootModeController:
         if not found:
             return RoundNotFound()
         try:
-            result = android_entry.sync_from_w2k2(
+            result = app_entry.sync_from_w2k2(
                 store.w2k2_user,
                 store.w2k2_password,
                 subnet,

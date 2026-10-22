@@ -15,7 +15,7 @@ import toga
 from toga.dialogs import QuestionDialog
 from toga.style.pack import COLUMN, NONE, ROW, Pack
 
-from nmea2log import android_entry, app_constants, app_settings, help_page, import_ebl, run_outcome
+from nmea2log import app_entry, app_constants, app_settings, help_page, import_ebl, run_outcome
 from nmea2log import log as nmea_log
 from nmea2log.upload import UploadError, normalize_rest_upload_url, upload_via_rest
 
@@ -44,8 +44,8 @@ _LOG_STRIP_HEIGHT = app_constants.LOG_STRIP_HEIGHT
 
 class ProgressCallback:
     """Plays the same role as MainActivity.kt's own SyncController object: the duck-typed
-    progress_callback android_entry.build_from_local_files()/sync_from_w2k2() call into during
-    the run (see android_entry.py's own doc comments for the exact method contract: report(),
+    progress_callback app_entry.build_from_local_files()/sync_from_w2k2() call into during
+    the run (see app_entry.py's own doc comments for the exact method contract: report(),
     isCancelled(), onLogLine(), onDownloadComplete(), onBoatState(), onResult()). Simpler here
     than on Android -- this is plain Python calling Python directly, no Chaquopy/Kotlin boundary
     to cross, so there's no need for MainActivity's own "capture via onResult() instead of
@@ -365,7 +365,7 @@ class MySailingLogbook(toga.App):
         text: found in practice (an import of 2326 files, one line each, then the decode progress after
         it), setting the whole UITextView text on every line kept the main thread so busy the log could
         not be scrolled at all. The full history stays available (up to _MAX_LOG_LINES) and is also in
-        nmea2log.log on disk (see android_entry.py's set_log_file())."""
+        nmea2log.log on disk (see app_entry.py's set_log_file())."""
         # A line the app made itself has no timestamp yet (Python's have): give it one like the rest and
         # put it in nmea2log.log too, as the Android app does (AppLog) -- the log and the file then tell
         # the same story.
@@ -558,7 +558,7 @@ class MySailingLogbook(toga.App):
     def _run_build_and_publish(self) -> None:
         callback = ProgressCallback(self, self.cancel_event)
         ebl_paths = [str(p) for p in sorted(self.ebl_dir().rglob("*.ebl"))]
-        result = android_entry.build_from_local_files(
+        result = app_entry.build_from_local_files(
             ebl_paths,
             str(self.output_html_path()),
             str(self.sample_cache_path()),
@@ -988,7 +988,7 @@ class MySailingLogbook(toga.App):
     def _run_build_from_local_files(self) -> None:
         callback = ProgressCallback(self, self.cancel_event)
         ebl_paths = [str(p) for p in sorted(self.ebl_dir().rglob("*.ebl"))]
-        result = android_entry.build_from_local_files(
+        result = app_entry.build_from_local_files(
             ebl_paths,
             str(self.output_html_path()),
             str(self.sample_cache_path()),
@@ -1014,7 +1014,7 @@ class MySailingLogbook(toga.App):
     # _run_build_from_local_files().
     def _run_download(self, subnet_prefix: str) -> None:
         callback = ProgressCallback(self, self.cancel_event)
-        result = android_entry.sync_from_w2k2(
+        result = app_entry.sync_from_w2k2(
             self.settings_store.w2k2_user,
             self.settings_store.w2k2_password,
             subnet_prefix,

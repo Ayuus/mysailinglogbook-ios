@@ -17,7 +17,7 @@ from typing import Callable, Dict
 
 
 class BackgroundRoundProgress:
-    """The ``progress_callback`` of ``android_entry.sync_from_w2k2()`` (the contract is in android_entry.py) for a boat-mode
+    """The ``progress_callback`` of ``app_entry.sync_from_w2k2()`` (the contract is in app_entry.py) for a boat-mode
     round. ``post(text)`` shows a notification; ``active()`` says whether the round runs in the background right now;
     ``on_log_line(line)`` gets every log line of the round (the same lines the Android app shows in its log);
     ``labels`` maps the phase ("downloading", "decoding", "building_trips") to its text."""

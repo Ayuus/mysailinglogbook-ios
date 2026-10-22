@@ -10,8 +10,8 @@ The app is a Briefcase/Toga app (`com.ayuus.mysailinglogbook`, the same applicat
 ```
 MySailingLogbook (manual download + auto-start on launch)
   -> network.detect_subnet_prefix()   network detection: finds the phone's own private-network subnet
-  -> android_entry.sync_from_w2k2()   [plain call into the real nmea2log package]
-       -> w2k2_download.discover_w2k2()   scans that subnet for the W2K-2's HTTP API
+  -> app_entry.sync_from_w2k2()   [plain call into the real nmea2log package]
+       -> w2k2_download.connect_to_w2k2()   tries the W2K-2 used last time, else scans that subnet for the W2K-2's HTTP API
        -> w2k2_download.download_file()    downloads new/changed .ebl files
        -> run_pipeline()                  decode -> build_trips -> write_html_logbook()
   -> WebView shows the resulting logbook.html
@@ -34,7 +34,7 @@ What each part does on iOS:
   they switch between black and white with Light/Dark mode the same way the title text next to
   them already does -- found in practice: left untinted, they render as solid black regardless of
   appearance, invisible against a dark toolbar.
-- **Download/Assemble**: call the same `nmea2log.android_entry.build_from_local_files()`/
+- **Download/Assemble**: call the same `nmea2log.app_entry.build_from_local_files()`/
   `sync_from_w2k2()` functions Android calls via Chaquopy -- plain Python calling Python here, no
   language boundary to cross. Runs on a background thread; UI updates marshal onto the main
   thread via `loop.call_soon_threadsafe()`.
@@ -64,8 +64,8 @@ What each part does on iOS:
   in `Launch Screen.storyboard` -- it cannot honor the in-app override for that one brief frame.
   Android has the same limitation for its own splash screen, for the same underlying reason (the OS
   draws it before any app code runs).
-- A real test suite (`tests/`) covers the pure logic: `network.py`'s private-IPv4 classification (mirrors
-  Android's own `HotspotDetectorTest.kt`), `settings_store.py`, `translations.py`, the boat-mode controller (with
+- A real test suite (`tests/`) covers the pure logic: `network.py`'s choice of the subnet (the address ranges and the
+  socket are nmea2log's `subnet.py`, with the cases Android's `HotspotDetectorTest.kt` has), `settings_store.py`, `translations.py`, the boat-mode controller (with
   stand-ins for the iOS calls) and `handlers.py`. Run it with pytest (the iOS classes it needs come from
   `rubicon-objc`, which imports on a Mac); the two tests in `test_app.py` need UIKit itself and only pass on an
   iPhone or in the Simulator.

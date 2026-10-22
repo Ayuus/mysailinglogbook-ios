@@ -131,7 +131,7 @@ def make_controller(data_dir: Path) -> BootModeController:
 def w2k2_on_the_network(monkeypatch):
     monkeypatch.setattr(module, "detect_subnet_prefix", lambda: "192.168.1.")
     monkeypatch.setattr(
-        module.android_entry,
+        module.app_entry,
         "sync_from_w2k2",
         lambda *args, **kwargs: {"ok": True, "downloaded_count": 2, "trip_count": 3, "boat_state": None},
     )
@@ -385,7 +385,7 @@ def _round_reporting(monkeypatch, steps):
         callback.onLogLine("2026-10-07 10:00:00 [info] a line of the round")
         return {"ok": True, "downloaded_count": 2, "trip_count": 3, "boat_state": None}
 
-    monkeypatch.setattr(module.android_entry, "sync_from_w2k2", fake)
+    monkeypatch.setattr(module.app_entry, "sync_from_w2k2", fake)
 
 
 def test_a_background_round_shows_its_progress_as_a_quiet_notification(tmp_path, monkeypatch):

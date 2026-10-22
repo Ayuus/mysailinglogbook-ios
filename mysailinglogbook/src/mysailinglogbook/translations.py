@@ -11,7 +11,7 @@ iOS alone (the Show password checkbox, a few of this app's own status messages) 
 following the same direct, concise tone as the shared strings.
 
 Deliberately NOT covered here: the pipeline's own log lines (from nmea2log's log() calls, via
-android_entry.py) -- those are shared with the desktop CLI and the Android app alike, and neither
+app_entry.py) -- those are shared with the desktop CLI and the Android app alike, and neither
 of those translates them either; only this app's own UI labels and its own locally-authored log/
 status lines are in scope.
 """
